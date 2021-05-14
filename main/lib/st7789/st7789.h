@@ -77,5 +77,10 @@ void lcdBacklightOff(TFT_t * dev);
 void lcdBacklightOn(TFT_t * dev);
 void lcdInversionOff(TFT_t * dev);
 void lcdInversionOn(TFT_t * dev);
+
+
+
+int lcdDrawString2(TFT_t * dev, uint8_t sizeht , uint8_t sizew, uint16_t x, uint16_t y, uint8_t * ascii, uint16_t color);
+
 #endif /* MAIN_ST7789_H_ */
 

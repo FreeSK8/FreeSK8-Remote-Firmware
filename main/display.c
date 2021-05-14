@@ -1,6 +1,6 @@
 #include "display.h"
 
-TickType_t ArrowTest(TFT_t * dev, FontxFile *fx, int width, int height) {
+TickType_t drawScreenDeveloper(TFT_t * dev, FontxFile *fx, int width, int height) {
 	static int yscroll = -50;
 	if (++yscroll > 25)
 	{
@@ -126,19 +126,103 @@ TickType_t ArrowTest(TFT_t * dev, FontxFile *fx, int width, int height) {
 	return diffTick;
 }
 
-TickType_t JPEGTest(TFT_t * dev, char * file, int width, int height) {
+TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height) {
 	TickType_t startTick, endTick, diffTick;
 	startTick = xTaskGetTickCount();
 
-	lcdSetFontDirection(dev, 0);
-	lcdFillScreen(dev, BLACK);
+	// get font width & height
+	uint8_t buffer[FontxGlyphBufSize];
+	uint8_t fontWidth = 9;
+	uint8_t fontHeight = 9;
+	GetFontx(fx, 0, buffer, &fontWidth, &fontHeight);
+	//ESP_LOGI(__FUNCTION__,"fontWidth=%d fontHeight=%d",fontWidth,fontHeight);
+
+	uint16_t xpos;
+	uint16_t ypos;
+	//int	stlen;
+	uint8_t ascii[24];
+	uint16_t color;
+
+	lcdSetFontFill(dev, BLACK);
+
+
+	//Battery
+	//TODO: 1052 max && ~825 min?
+	sprintf((char *)ascii, "%04d", adc_raw_battery_level);
+	{
+		ypos = 40;
+		xpos = 20;
+		lcdSetFontDirection(dev, DIRECTION0);
+	}
+	color = WHITE;
+	lcdDrawString(dev, fx, xpos, ypos, ascii, color);
+	lcdDrawRect(dev, 20, 40, 80, 10, RED);
+	lcdDrawFillRect(dev, 5/*left*/, 5/*down*/, 80 /*width*/, 40 /*height*/, RED);
+
+//FAULT
+JPEGTest(dev, (char*)"/spiffs/map_fault.jpg", 25, 25, 100, 0);
+
+	//RSSI
+	sprintf((char *)ascii, "%04d", adc_raw_rssi);
+	{
+		ypos = 40;
+		xpos = 160;
+		lcdSetFontDirection(dev, DIRECTION0);
+	}
+	color = WHITE;
+	lcdDrawString(dev, fx, xpos, ypos, ascii, color);
+
+	//Board Battery
+	sprintf((char *)ascii, "%0.1f%%", esc_telemetry.battery_level * 100);
+	{
+		ypos = (height - fontHeight);
+		xpos = 5;
+		lcdSetFontDirection(dev, DIRECTION0);
+	}
+	color = WHITE;
+	lcdDrawString(dev, fx, xpos, ypos, ascii, color);
+
+	// Odometer
+	sprintf((char *)ascii, "%02.2f", esc_telemetry.tachometer_abs / 1000.0);
+	{
+		ypos = (height - fontHeight);
+		xpos = 160;
+		lcdSetFontDirection(dev, DIRECTION0);
+	}
+	color = WHITE;
+	lcdDrawString(dev, fx, xpos, ypos, ascii, color);
+
+	// Speed big numbers
+	fontWidth = 9;
+	fontHeight = 9;
+	sprintf((char *)ascii, "%02d", (int)esc_telemetry.speed);
+	{
+		ypos = 42;
+		xpos = (width - (strlen((char *)ascii) * 8 * fontWidth)) / 2;
+		lcdSetFontDirection(dev, DIRECTION0);
+	}
+	color = YELLOW;
+	lcdDrawString2(dev, fontHeight, fontWidth, xpos, ypos, ascii, color);
+
+	endTick = xTaskGetTickCount();
+	diffTick = endTick - startTick;
+	ESP_LOGI(__FUNCTION__, "elapsed time[ms]:%d",diffTick*portTICK_RATE_MS);
+	return diffTick;
+}
+
+TickType_t JPEGTest(TFT_t * dev, char * file, int width, int height, int offset_x, int offset_y) {
+	TickType_t startTick, endTick, diffTick;
+	startTick = xTaskGetTickCount();
+
+	//lcdSetFontDirection(dev, 0);
+	//lcdFillScreen(dev, BLACK);
 
 
 	pixel_s **pixels;
 	uint16_t imageWidth;
 	uint16_t imageHeight;
 	esp_err_t err = decode_image(&pixels, file, width, height, &imageWidth, &imageHeight);
-	ESP_LOGI(__FUNCTION__, "decode_image err=%d imageWidth=%d imageHeight=%d", err, imageWidth, imageHeight);
+	//ESP_LOGI(__FUNCTION__, "decode_image err=%d imageWidth=%d imageHeight=%d", err, imageWidth, imageHeight);
 	if (err == ESP_OK) {
 
 		uint16_t _width = width;
@@ -147,7 +231,7 @@ TickType_t JPEGTest(TFT_t * dev, char * file, int width, int height) {
 			_width = imageWidth;
 			_cols = (width - imageWidth) / 2;
 		}
-		ESP_LOGD(__FUNCTION__, "_width=%d _cols=%d", _width, _cols);
+		//ESP_LOGD(__FUNCTION__, "_width=%d _cols=%d", _width, _cols);
 
 		uint16_t _height = height;
 		uint16_t _rows = 0;
@@ -155,7 +239,7 @@ TickType_t JPEGTest(TFT_t * dev, char * file, int width, int height) {
 			_height = imageHeight;
 			_rows = (height - imageHeight) / 2;
 		}
-		ESP_LOGD(__FUNCTION__, "_height=%d _rows=%d", _height, _rows);
+		//ESP_LOGD(__FUNCTION__, "_height=%d _rows=%d", _height, _rows);
 		uint16_t *colors = (uint16_t*)malloc(sizeof(uint16_t) * _width);
 
 #if 0
@@ -174,7 +258,7 @@ TickType_t JPEGTest(TFT_t * dev, char * file, int width, int height) {
 				pixel_s pixel = pixels[y][x];
 				colors[x] = rgb565_conv(pixel.red, pixel.green, pixel.blue);
 			}
-			lcdDrawMultiPixels(dev, _cols, y+_rows, _width, colors);
+			lcdDrawMultiPixels(dev, _cols+offset_x, y+_rows+offset_y, _width, colors);
 			vTaskDelay(1);
 		}
 
