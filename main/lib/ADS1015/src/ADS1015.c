@@ -63,6 +63,9 @@ void ADS1015_init()
     */
 }
 
+//Gain 2/3 164 & 190 disconnected 0-1088 connected
+//Gain ONE 257 & 275 disconnected 0-1631 connected
+//Gain
 uint16_t ADS1015_readADC_SingleEnded(uint8_t channel)
 {
 

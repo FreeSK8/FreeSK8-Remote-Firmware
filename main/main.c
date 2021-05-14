@@ -22,9 +22,9 @@
 void print_haptic_registers();
 void test_haptic_now();
 
-float accel_g_x;
-float accel_g_y;
-float accel_g_z;
+float accel_g_x, accel_g_x_delta;
+float accel_g_y, accel_g_y_delta;
+float accel_g_z, accel_g_z_delta;
 
 
 /* Piezo */
@@ -99,15 +99,15 @@ static void piezo_test(void *arg)
 
     while (1) {
         if (accel_g_x > 1.75) {
-			melody_play(MELODY_LOG_START, false);
+			//melody_play(MELODY_LOG_START, false);
 		}
 		if (accel_g_y > 1.75) {
-			melody_play(MELODY_STARTUP, false);
+			//melody_play(MELODY_STARTUP, false);
 		}
 		if (accel_g_z > 1.75) {
-			melody_play(MELODY_BLE_SUCCESS, false);
+			//melody_play(MELODY_BLE_SUCCESS, false);
 		}
-		melody_step();
+		//melody_step();
 		
 		
 		vTaskDelay(10/portTICK_PERIOD_MS);
@@ -313,18 +313,27 @@ static void i2c_task(void *arg)
 		mpu6050_get_acceleration(&accel);
 		//printf("accel raw x%d y%d z%d\n", accel.accel_x, accel.accel_y, accel.accel_y);
 
-		accel_g_x = (float) accel.accel_x * accel_res - accel_bias[0];
-		accel_g_y = (float) accel.accel_y * accel_res - accel_bias[1];
-		accel_g_z = (float) accel.accel_z * accel_res - accel_bias[2];
+		float accel_gx = (float) accel.accel_x * accel_res - accel_bias[0];
+		float accel_gy = (float) accel.accel_y * accel_res - accel_bias[1];
+		float accel_gz = (float) accel.accel_z * accel_res - accel_bias[2];
 
-		if (accel_g_x < 0)
-			accel_g_x *= -1;
-		if (accel_g_y < 0)
-			accel_g_y *= -1;
-		if (accel_g_z < 0)
-			accel_g_z *= -1;
+		if (accel_gx < 0)
+			accel_gx *= -1;
+		if (accel_gy < 0)
+			accel_gy *= -1;
+		if (accel_gz < 0)
+			accel_gz *= -1;
 
-		printf("accel G x%02f y%02f z%02f\n", accel_g_x, accel_g_y, accel_g_z);
+		accel_g_x_delta = accel_g_x - accel_gx;
+		accel_g_y_delta = accel_g_y - accel_gy;
+		accel_g_z_delta = accel_g_z - accel_gz;
+		accel_g_x = accel_gx;
+		accel_g_y = accel_gy;
+		accel_g_z = accel_gz;
+
+		printf("accel G x%02f y%02f z%02f\n", accel_g_x_delta, accel_g_y_delta, accel_g_z_delta);
+
+
 	}
 }
 /* I2C Tasks */
@@ -600,7 +609,7 @@ void ST7789_Task(void *pvParameters)
 #endif
 
 	lcdFillScreen(&dev, BLACK);
-#ifdef CONFIG_IDF_TARGET_ESP32
+#if 0
 		char file[32];
 		strcpy(file, "/spiffs/esp32.jpeg");
 		JPEGTest(&dev, file, CONFIG_WIDTH, CONFIG_HEIGHT);
@@ -608,15 +617,38 @@ void ST7789_Task(void *pvParameters)
 #endif
 	lcdFillScreen(&dev, BLACK);
 
+	bool is_remote_idle = true;
+	uint8_t idle_delay = 0;
 	while(1) {
 
-		ArrowTest(&dev, fx24M, CONFIG_WIDTH, CONFIG_HEIGHT);
-		//vTaskDelay(100/10);
+		//drawScreenDeveloper(&dev, fx24M, CONFIG_WIDTH, CONFIG_HEIGHT);
+		const float delta_threshold = 0.025;
+		if (accel_g_x_delta > delta_threshold || accel_g_y_delta > delta_threshold || accel_g_z_delta > delta_threshold)
+		{
+			idle_delay = 0;
+			is_remote_idle = false;
+		}
+		else if (++idle_delay > 30)
+		{
+			idle_delay = 0;
+			is_remote_idle = true;
+		}
+
+		if (!is_remote_idle)
+		{
+			lcdBacklightOn(&dev);
+			drawScreenPrimary(&dev, fx24M, CONFIG_WIDTH, CONFIG_HEIGHT);
+		}
+		else
+		{
+			lcdFillScreen(&dev, BLACK);
+			lcdBacklightOff(&dev);
+			vTaskDelay(100/10);
+		}
 
 		uint8_t command[1] = { COMM_GET_VALUES_SETUP };
 		packSendPayload(command, 1);
-		
-
+		vTaskDelay(10/10);
 	}
 }
 
@@ -712,6 +744,6 @@ void app_main(void)
 	// Just chillin
 	while(1)
 	{
-		vTaskDelay(500/portTICK_PERIOD_MS);
+		vTaskDelay(100/portTICK_PERIOD_MS);
 	}
 }
