@@ -126,6 +126,10 @@ TickType_t drawScreenDeveloper(TFT_t * dev, FontxFile *fx, int width, int height
 	return diffTick;
 }
 
+static uint16_t adc_raw_battery_level_previous;
+static uint16_t adc_raw_rssi_previous;
+static double battery_level_previous;
+static int tachometer_abs_previous;
 TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height) {
 	TickType_t startTick, endTick, diffTick;
 	startTick = xTaskGetTickCount();
@@ -147,50 +151,73 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height) 
 
 
 	//Battery
-	//TODO: 1052 max && ~825 min?
-	sprintf((char *)ascii, "%04d", adc_raw_battery_level);
+	if (adc_raw_battery_level != adc_raw_battery_level_previous)
 	{
-		ypos = 40;
-		xpos = 20;
-		lcdSetFontDirection(dev, DIRECTION0);
+		adc_raw_battery_level_previous = adc_raw_battery_level;
+		//TODO: 1052 max && ~825 min?
+		sprintf((char *)ascii, "%04d", adc_raw_battery_level);
+		{
+			ypos = 40;
+			xpos = 20;
+			lcdSetFontDirection(dev, DIRECTION0);
+		}
+		color = WHITE;
+		lcdDrawString(dev, fx, xpos, ypos, ascii, color);
+		//lcdDrawRect(dev, 20, 40, 80, 10, RED);
+		//lcdDrawFillRect(dev, 5/*left*/, 5/*down*/, 80 /*width*/, 40 /*height*/, RED);
 	}
-	color = WHITE;
-	lcdDrawString(dev, fx, xpos, ypos, ascii, color);
-	lcdDrawRect(dev, 20, 40, 80, 10, RED);
-	lcdDrawFillRect(dev, 5/*left*/, 5/*down*/, 80 /*width*/, 40 /*height*/, RED);
 
-//FAULT
-JPEGTest(dev, (char*)"/spiffs/map_fault.jpg", 25, 25, 100, 0);
+
+	//FAULT
+	if (esc_telemetry.fault_code != 0)
+	{
+		JPEGTest(dev, (char*)"/spiffs/map_fault.jpg", 25, 25, 100, 0);
+	}
+
 
 	//RSSI
-	sprintf((char *)ascii, "%04d", adc_raw_rssi);
+	if (adc_raw_rssi != adc_raw_rssi_previous)
 	{
-		ypos = 40;
-		xpos = 160;
-		lcdSetFontDirection(dev, DIRECTION0);
+		adc_raw_rssi_previous = adc_raw_rssi;
+		sprintf((char *)ascii, "%04d", adc_raw_rssi);
+		{
+			ypos = 40;
+			xpos = 160;
+			lcdSetFontDirection(dev, DIRECTION0);
+		}
+		color = WHITE;
+		lcdDrawString(dev, fx, xpos, ypos, ascii, color);
 	}
-	color = WHITE;
-	lcdDrawString(dev, fx, xpos, ypos, ascii, color);
+
 
 	//Board Battery
-	sprintf((char *)ascii, "%0.1f%%", esc_telemetry.battery_level * 100);
+	if (esc_telemetry.battery_level != battery_level_previous)
 	{
-		ypos = (height - fontHeight);
-		xpos = 5;
-		lcdSetFontDirection(dev, DIRECTION0);
+		battery_level_previous = esc_telemetry.battery_level;
+		sprintf((char *)ascii, "%0.1f%%", esc_telemetry.battery_level * 100);
+		{
+			ypos = (height - fontHeight);
+			xpos = 5;
+			lcdSetFontDirection(dev, DIRECTION0);
+		}
+		color = WHITE;
+		lcdDrawString(dev, fx, xpos, ypos, ascii, color);
 	}
-	color = WHITE;
-	lcdDrawString(dev, fx, xpos, ypos, ascii, color);
+
 
 	// Odometer
-	sprintf((char *)ascii, "%02.2f", esc_telemetry.tachometer_abs / 1000.0);
+	if (esc_telemetry.tachometer_abs != tachometer_abs_previous)
 	{
-		ypos = (height - fontHeight);
-		xpos = 160;
-		lcdSetFontDirection(dev, DIRECTION0);
+		tachometer_abs_previous = esc_telemetry.tachometer_abs;
+		sprintf((char *)ascii, "%02.2fkm", esc_telemetry.tachometer_abs / 1000.0);
+		{
+			ypos = (height - fontHeight);
+			xpos = 160;
+			lcdSetFontDirection(dev, DIRECTION0);
+		}
+		color = WHITE;
+		lcdDrawString(dev, fx, xpos, ypos, ascii, color);
 	}
-	color = WHITE;
-	lcdDrawString(dev, fx, xpos, ypos, ascii, color);
 
 	// Speed big numbers
 	fontWidth = 9;
