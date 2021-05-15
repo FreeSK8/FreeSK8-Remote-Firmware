@@ -301,7 +301,7 @@ static void i2c_task(void *arg)
 		printf("SW1:%d SW2:%d SW3:%d USB:%d JOY1:%04d JOY2:%04d BATT:%04d RSSI:%04d ", gpio_switch_1, gpio_switch_2, gpio_switch_3, gpio_usb_detect, adc_raw_joystick, adc_raw_joystick_2, adc_raw_battery_level, adc_raw_rssi);
 		/* ADC */
 		adc_raw_joystick = ADS1015_readADC_SingleEnded(0);
-		joystick_value_mapped = map(adc_raw_joystick, 2, 1569, 0, 255);
+		joystick_value_mapped = map(adc_raw_joystick, 2, 1632, 0, 255);
 		printf("Throttle = %d ", joystick_value_mapped);
 
 		adc_raw_battery_level = ADS1015_readADC_SingleEnded(1);
@@ -467,14 +467,14 @@ static void xbee_task(void *arg)
 
 	packet_init(uart_send_buffer, process_packet_vesc, PACKET_VESC);
 
-
+	uint8_t limiter = 0;
     while (1) {
         // Read data from the UART
         int len = uart_read_bytes(XBEE_UART_PORT_NUM, data, XBEE_BUF_SIZE, 20 / portTICK_RATE_MS);
 
 		if (remote_in_pairing_mode)
 		{
-
+			printf("TODO: pairing mode\n");
 		}
 		else
 		{
@@ -486,6 +486,15 @@ static void xbee_task(void *arg)
 			}
 
 			setNunchuckValues();
+
+			//Request telemetry
+			if (++limiter > 10)
+			{
+				printf("requesting telemetry\n");
+				limiter = 0;
+				uint8_t command[1] = { COMM_GET_VALUES_SETUP };
+				packSendPayload(command, 1);
+			}
 		}
 		
 		vTaskDelay(10/portTICK_PERIOD_MS);
@@ -637,17 +646,16 @@ void ST7789_Task(void *pvParameters)
 		if (!is_remote_idle)
 		{
 			lcdBacklightOn(&dev);
-			drawScreenPrimary(&dev, fx24M, CONFIG_WIDTH, CONFIG_HEIGHT);
+			//drawScreenPrimary(&dev, fx24M, CONFIG_WIDTH, CONFIG_HEIGHT);
+			drawScreenDeveloper(&dev, fx24M, CONFIG_WIDTH, CONFIG_HEIGHT);
 		}
 		else
 		{
-			lcdFillScreen(&dev, BLACK);
+			//lcdFillScreen(&dev, BLACK);
 			lcdBacklightOff(&dev);
 			vTaskDelay(100/10);
 		}
 
-		uint8_t command[1] = { COMM_GET_VALUES_SETUP };
-		packSendPayload(command, 1);
 		vTaskDelay(10/10);
 	}
 }

@@ -780,11 +780,11 @@ int fwh = 16; //iod09 font selection
 		uint8_t trow;
 		trow = font2[(c * 16) + j];
 		for (int8_t i = 0; i < (fsw + 1); i++)
-		{     
+		{
 			if (i == (fsw))
-			{ 
+			{
 				trow = 0x00;
-			} 
+			}
 			if (trow & 0x80)
 			{
 				if (sizew == 1 && sizeht == 1)
@@ -792,8 +792,8 @@ int fwh = 16; //iod09 font selection
 					if(y + j > 159 && (rotation == 3 || rotation == 2))
 					{
 						lcdDrawPixel(dev, x + i, y + j - 160, color);
-					} 
-					else 
+					}
+					else
 					{
 						lcdDrawPixel(dev, x + i, y + j, color);
 					}
@@ -801,7 +801,7 @@ int fwh = 16; //iod09 font selection
 				else
 				{
 					lcdDrawFillRect(dev, x + (i * sizew), y + (j * sizeht), (sizew + x) + (i * sizew) - 1, (sizeht + y) + (j * sizeht) - 1, color);
-				} 
+				}
 			}
 			else if (dev->_font_fill_color != color)
 			{
