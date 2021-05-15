@@ -646,8 +646,8 @@ void ST7789_Task(void *pvParameters)
 		if (!is_remote_idle)
 		{
 			lcdBacklightOn(&dev);
-			//drawScreenPrimary(&dev, fx24M, CONFIG_WIDTH, CONFIG_HEIGHT);
-			drawScreenDeveloper(&dev, fx24M, CONFIG_WIDTH, CONFIG_HEIGHT);
+			drawScreenPrimary(&dev, fx24M, CONFIG_WIDTH, CONFIG_HEIGHT);
+			//drawScreenDeveloper(&dev, fx24M, CONFIG_WIDTH, CONFIG_HEIGHT);
 		}
 		else
 		{

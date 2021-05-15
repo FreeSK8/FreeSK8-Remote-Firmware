@@ -194,7 +194,7 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height) 
 	if (esc_telemetry.battery_level != battery_level_previous)
 	{
 		battery_level_previous = esc_telemetry.battery_level;
-		sprintf((char *)ascii, "%0.1f%%", esc_telemetry.battery_level * 100);
+		sprintf((char *)ascii, "%0.1f%% %0.2fvdc", esc_telemetry.battery_level * 100, esc_telemetry.v_in);
 		{
 			ypos = (height - fontHeight);
 			xpos = 5;
