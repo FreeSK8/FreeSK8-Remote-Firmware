@@ -151,6 +151,7 @@ int gpio_switch_2 = 0;
 int gpio_switch_3 = 0;
 int gpio_switch_detect = 0;
 int gpio_usb_detect = 0;
+TickType_t startTick, endTick, diffTick;
 static void GPIO_Task(void* arg)
 {
 	gpio_switch_3 = !gpio_get_level(GPIO_INPUT_IO_0);
@@ -193,10 +194,23 @@ static void GPIO_Task(void* arg)
 				break;
 				case GPIO_INPUT_IO_3: //switch detect
 					printf("SWITCH DETECT %d\n", gpio_get_level(io_num));
-					if( gpio_get_level(io_num) == 1)
+					// Make sure user holds power for one second before power off
+					if(gpio_get_level(io_num) == 1)
 					{
-						/// Turn battery power off
-						gpio_set_level(GPIO_OUTPUT_IO_1, 0);
+						// Time down
+						startTick = xTaskGetTickCount();
+					}
+					else
+					{
+						endTick = xTaskGetTickCount();
+						diffTick = endTick - startTick;
+						ESP_LOGI(__FUNCTION__, "Power button elapsed time[ms]:%d",diffTick*portTICK_RATE_MS);
+
+						if (diffTick*portTICK_RATE_MS > 1000)
+						{
+							/// Turn battery power off
+							gpio_set_level(GPIO_OUTPUT_IO_1, 0);
+						}
 					}
 				break;
 				case GPIO_INPUT_IO_4:
@@ -490,7 +504,7 @@ static void xbee_task(void *arg)
 			//Request telemetry
 			if (++limiter > 10)
 			{
-				printf("requesting telemetry\n");
+				//printf("requesting telemetry\n");
 				limiter = 0;
 				uint8_t command[1] = { COMM_GET_VALUES_SETUP };
 				packSendPayload(command, 1);

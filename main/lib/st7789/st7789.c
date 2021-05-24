@@ -985,9 +985,9 @@ int lcdDrawString(TFT_t * dev, FontxFile *fx, uint16_t x, uint16_t y, uint8_t * 
 
 int lcdDrawString2(TFT_t * dev, uint8_t sizeht , uint8_t sizew, uint16_t x, uint16_t y, uint8_t * ascii, uint16_t color) {
 	int length = strlen((char *)ascii);
-	printf("lcdDrawString length=%d\n",length);
+	//printf("lcdDrawString length=%d\n",length);
 	for(int i=0;i<length;i++) {
-		printf("ascii[%d]=%x x=%d y=%d\n",i,ascii[i],x,y);
+		//printf("ascii[%d]=%x x=%d y=%d\n",i,ascii[i],x,y);
 		if (dev->_font_direction == 0)
 			x = drawChar2(dev, sizeht, sizew, x, y, ascii[i], color);
 		if (dev->_font_direction == 1)

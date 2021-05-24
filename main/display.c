@@ -194,7 +194,7 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height) 
 	if (esc_telemetry.battery_level != battery_level_previous)
 	{
 		battery_level_previous = esc_telemetry.battery_level;
-		sprintf((char *)ascii, "%0.1f%% %0.2fvdc", esc_telemetry.battery_level * 100, esc_telemetry.v_in);
+		sprintf((char *)ascii, "%0.1f%%", esc_telemetry.battery_level * 100);
 		{
 			ypos = (height - fontHeight);
 			xpos = 5;
@@ -222,7 +222,9 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height) 
 	// Speed big numbers
 	fontWidth = 9;
 	fontHeight = 9;
-	sprintf((char *)ascii, "%02d", (int)esc_telemetry.speed);
+	const float metersPerSecondToKph = 3.6;
+	const int kphToMph = 0.621371;
+	sprintf((char *)ascii, "%02d", (int)(esc_telemetry.speed * metersPerSecondToKph * kphToMph));
 	{
 		ypos = 42;
 		xpos = (width - (strlen((char *)ascii) * 8 * fontWidth)) / 2;
@@ -233,7 +235,7 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height) 
 
 	endTick = xTaskGetTickCount();
 	diffTick = endTick - startTick;
-	ESP_LOGI(__FUNCTION__, "elapsed time[ms]:%d",diffTick*portTICK_RATE_MS);
+	//ESP_LOGI(__FUNCTION__, "elapsed time[ms]:%d",diffTick*portTICK_RATE_MS);
 	return diffTick;
 }
 
