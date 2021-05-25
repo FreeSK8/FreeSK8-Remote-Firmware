@@ -331,13 +331,6 @@ static void i2c_task(void *arg)
 		float accel_gy = (float) accel.accel_y * accel_res - accel_bias[1];
 		float accel_gz = (float) accel.accel_z * accel_res - accel_bias[2];
 
-		if (accel_gx < 0)
-			accel_gx *= -1;
-		if (accel_gy < 0)
-			accel_gy *= -1;
-		if (accel_gz < 0)
-			accel_gz *= -1;
-
 		accel_g_x_delta = accel_g_x - accel_gx;
 		accel_g_y_delta = accel_g_y - accel_gy;
 		accel_g_z_delta = accel_g_z - accel_gz;
@@ -345,7 +338,7 @@ static void i2c_task(void *arg)
 		accel_g_y = accel_gy;
 		accel_g_z = accel_gz;
 
-		printf("accel G x%02f y%02f z%02f\n", accel_g_x_delta, accel_g_y_delta, accel_g_z_delta);
+		printf("accel G x%02f y%02f z%02f\n", accel_g_x, accel_g_y, accel_g_z);
 
 
 	}
@@ -660,8 +653,20 @@ void ST7789_Task(void *pvParameters)
 		if (!is_remote_idle)
 		{
 			lcdBacklightOn(&dev);
-			drawScreenPrimary(&dev, fx24M, CONFIG_WIDTH, CONFIG_HEIGHT);
-			//drawScreenDeveloper(&dev, fx24M, CONFIG_WIDTH, CONFIG_HEIGHT);
+			if (accel_g_x < -0.95 && fabs(accel_g_y) < 0.04 && fabs(accel_g_z) < 0.04) {
+				//TODO: Pointing straight up
+				drawScreenDeveloper(&dev, fx24M, CONFIG_WIDTH, CONFIG_HEIGHT);
+			}
+			else if (accel_g_x > 0.95 && fabs(accel_g_y) < 0.04 && fabs(accel_g_z) < 0.04) {
+				//TODO: Pointing straight down
+				lcdFillScreen(&dev, BLACK);
+				drawScreenPrimary(&dev, fx24M, CONFIG_WIDTH, CONFIG_HEIGHT);
+			}
+			else
+			{
+				// Most positions
+				drawScreenPrimary(&dev, fx24M, CONFIG_WIDTH, CONFIG_HEIGHT);
+			}
 		}
 		else
 		{

@@ -1,5 +1,7 @@
 #include "display.h"
 
+extern long map(long x, long in_min, long in_max, long out_min, long out_max);
+
 TickType_t drawScreenDeveloper(TFT_t * dev, FontxFile *fx, int width, int height) {
 	static int yscroll = -50;
 	if (++yscroll > 25)
@@ -126,10 +128,16 @@ TickType_t drawScreenDeveloper(TFT_t * dev, FontxFile *fx, int width, int height
 	return diffTick;
 }
 
-static uint16_t adc_raw_battery_level_previous;
-static uint16_t adc_raw_rssi_previous;
+//static uint16_t adc_raw_battery_level_previous;
+//static uint16_t adc_raw_rssi_previous;
 static double battery_level_previous;
 static int tachometer_abs_previous;
+const int adc_raw_battery_minimum = 825;
+const int adc_raw_battery_maximum = 1052;
+const int adc_raw_rssi_maximum = 1639;
+const int adc_raw_rssi_minimum = 850;
+static uint8_t rssi_mapped_previous;
+static uint8_t batt_pixel_previous;
 TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height) {
 	TickType_t startTick, endTick, diffTick;
 	startTick = xTaskGetTickCount();
@@ -150,21 +158,18 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height) 
 	lcdSetFontFill(dev, BLACK);
 
 
-	//Battery
-	if (adc_raw_battery_level != adc_raw_battery_level_previous)
+	//Remote Battery
+	const uint8_t batt_height = 30;
+	uint8_t batt_pixel = map(adc_raw_battery_level, adc_raw_battery_minimum, adc_raw_battery_maximum, 10, 80); //Scale battery %
+	if (batt_pixel != batt_pixel_previous)
 	{
-		adc_raw_battery_level_previous = adc_raw_battery_level;
-		//TODO: 1052 max && ~825 min?
-		sprintf((char *)ascii, "%04d", adc_raw_battery_level);
-		{
-			ypos = 40;
-			xpos = 20;
-			lcdSetFontDirection(dev, DIRECTION0);
-		}
-		color = WHITE;
-		lcdDrawString(dev, fx, xpos, ypos, ascii, color);
-		//lcdDrawRect(dev, 20, 40, 80, 10, RED);
-		//lcdDrawFillRect(dev, 5/*left*/, 5/*down*/, 80 /*width*/, 40 /*height*/, RED);
+		lcdDrawRect(dev, 5, 5, 82, batt_height, BLUE); //Draw outline //TODO: Only draw once to reduce render time
+		lcdDrawFillRect(dev, 82, (batt_height /3), 86, 5+(batt_height / 3) * 2, BLUE); //Draw nub //TODO: only once takes time blah blah
+		uint16_t color = GREEN;
+		if (batt_pixel < 30) color = RED;
+		else if (batt_pixel < 60) color = YELLOW;
+		lcdDrawFillRect(dev, 6/*left*/, 6/*down*/, batt_pixel /*width*/, batt_height -2 /*height*/, color); //Draw battery %
+		lcdDrawFillRect(dev, batt_pixel/*left*/, 6/*down*/, batt_pixel + (80-batt_pixel) /*width*/, batt_height -2 /*height*/, BLACK); //Clear empty space
 	}
 
 
@@ -176,9 +181,11 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height) 
 
 
 	//RSSI
-	if (adc_raw_rssi != adc_raw_rssi_previous)
+	//TODO: Detect 0 value && display NO SIGNAL
+	uint8_t rssi_mapped = map(adc_raw_rssi, adc_raw_rssi_minimum, adc_raw_rssi_maximum, 1, 5);
+	if (rssi_mapped != rssi_mapped_previous)
 	{
-		adc_raw_rssi_previous = adc_raw_rssi;
+		rssi_mapped_previous = rssi_mapped;
 		sprintf((char *)ascii, "%04d", adc_raw_rssi);
 		{
 			ypos = 40;
@@ -186,7 +193,15 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height) 
 			lcdSetFontDirection(dev, DIRECTION0);
 		}
 		color = WHITE;
-		lcdDrawString(dev, fx, xpos, ypos, ascii, color);
+		//lcdDrawString(dev, fx, xpos, ypos, ascii, color);
+
+		lcdDrawFillRect(dev, 160, 5, 235, 40, BLACK); //Blank drawing area
+		uint8_t rssi_mapped = map(adc_raw_rssi, adc_raw_rssi_minimum, adc_raw_rssi_maximum, 1, 5);
+		for (int i=0; i<rssi_mapped; ++i)
+		{
+			lcdDrawFillRect(dev, 161 + (i * 10)/*left*/, 6 + ((5-i) * 5)/*down*/, 161 + (i * 10) + 5 /*width*/, 38 /*height*/, GREEN); //Draw battery %
+		}
+
 	}
 
 
@@ -223,7 +238,7 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height) 
 	fontWidth = 9;
 	fontHeight = 9;
 	const float metersPerSecondToKph = 3.6;
-	const int kphToMph = 0.621371;
+	const float kphToMph = 0.621371;
 	sprintf((char *)ascii, "%02d", (int)(esc_telemetry.speed * metersPerSecondToKph * kphToMph));
 	{
 		ypos = 42;
