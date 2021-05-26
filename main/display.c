@@ -130,7 +130,7 @@ TickType_t drawScreenDeveloper(TFT_t * dev, FontxFile *fx, int width, int height
 
 //static uint16_t adc_raw_battery_level_previous;
 //static uint16_t adc_raw_rssi_previous;
-static double battery_level_previous;
+//static double battery_level_previous;
 static int tachometer_abs_previous;
 const int adc_raw_battery_minimum = 825;
 const int adc_raw_battery_maximum = 1052;
@@ -207,12 +207,12 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height) 
 
 
 	//Board Battery
-	const uint8_t board_batt_width = 200;
+	const uint8_t board_batt_width = 220;
 	const uint8_t board_batt_x1 = 10;
 	const uint8_t board_batt_y1 = 200;
 	const uint8_t board_batt_y2 = 235;
-	esc_telemetry.battery_level += 0.1;
-	if (esc_telemetry.battery_level > 1.0) esc_telemetry.battery_level = 0;
+	esc_telemetry.battery_level -= 0.005;
+	if (esc_telemetry.battery_level < 0.0) esc_telemetry.battery_level = 1.0;
 	uint8_t board_batt_pixel = map(esc_telemetry.battery_level * 100, 0, 100, board_batt_x1, board_batt_x1 + board_batt_width);
 	//TODO board_batt_pixel_previous
 	if (board_batt_pixel_previous != board_batt_pixel)
@@ -220,8 +220,8 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height) 
 		board_batt_pixel_previous = board_batt_pixel;
 		sprintf((char *)ascii, "%0.1f%%  ", esc_telemetry.battery_level * 100);
 		{
-			ypos = board_batt_y1 - 1;
-			xpos = 15;
+			ypos = board_batt_y2 - 6;
+			xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
 			lcdSetFontDirection(dev, DIRECTION0);
 		}
 		color = WHITE;
@@ -239,8 +239,10 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height) 
 		lcdDrawFillRect(dev, board_batt_x1 + 1/*left*/, board_batt_y1 + 1/*down*/, board_batt_pixel /*width*/, board_batt_y2 -2 /*height*/, color); //Draw battery %
 		lcdDrawFillRect(dev, board_batt_pixel + 1/*left*/, board_batt_y1 + 1/*down*/, board_batt_pixel + (board_batt_width-board_batt_pixel+board_batt_x1) /*width*/, board_batt_y2 -2 /*height*/, BLACK); //Clear empty space
 
-//lcdUnsetFontFill(dev);
-		lcdDrawString(dev, fx, xpos, ypos, ascii, WHITE);
+lcdUnsetFontFill(dev);
+		if (esc_telemetry.battery_level * 100 < 45) color = WHITE;
+		else color = BLACK;
+		lcdDrawString(dev, fx, xpos, ypos, ascii, color);
 	}
 
 
@@ -251,7 +253,7 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height) 
 		sprintf((char *)ascii, "%02.2fkm", esc_telemetry.tachometer_abs / 1000.0);
 		{
 			ypos = board_batt_y1 - 1;
-			xpos = 160;
+			xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
 			lcdSetFontDirection(dev, DIRECTION0);
 		}
 		color = WHITE;
@@ -260,7 +262,7 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height) 
 
 	// Speed big numbers
 	fontWidth = 9;
-	fontHeight = 9;
+	fontHeight = 8;
 	const float metersPerSecondToKph = 3.6;
 	const float kphToMph = 0.621371;
 	sprintf((char *)ascii, "%02d", (int)(esc_telemetry.speed * metersPerSecondToKph * kphToMph));
