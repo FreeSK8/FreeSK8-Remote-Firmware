@@ -196,13 +196,15 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height) 
 		color = WHITE;
 		//lcdDrawString(dev, fx, xpos, ypos, ascii, color);
 
-		lcdDrawFillRect(dev, 160, 5, 235, 40, BLACK); //Blank drawing area
+		lcdDrawFillRect(dev, 180, 5, 235, 40, BLACK); //Blank drawing area
 		uint8_t rssi_mapped = map(adc_raw_rssi, adc_raw_rssi_minimum, adc_raw_rssi_maximum, 1, 5);
 		for (int i=0; i<rssi_mapped; ++i)
 		{
-			lcdDrawFillRect(dev, 161 + (i * 10)/*left*/, 6 + ((5-i) * 5)/*down*/, 161 + (i * 10) + 5 /*width*/, 38 /*height*/, GREEN); //Draw battery %
+			lcdDrawFillRect(dev, 181 + (i * 10)/*left*/, 6 + ((5-i) * 5)/*down*/, 181 + (i * 10) + 5 /*width*/, 38 /*height*/, GREEN); //Draw battery %
 		}
 
+		lcdDrawTriangle(dev, 170, 15, 10, 6, 0, GREEN);
+		lcdDrawLine(dev, 170, 15, 170, 38, GREEN);
 	}
 
 
