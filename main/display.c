@@ -213,8 +213,8 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height) 
 	const uint8_t board_batt_x1 = 10;
 	const uint8_t board_batt_y1 = 200;
 	const uint8_t board_batt_y2 = 235;
-	esc_telemetry.battery_level -= 0.005;
-	if (esc_telemetry.battery_level < 0.0) esc_telemetry.battery_level = 1.0;
+	//esc_telemetry.battery_level -= 0.005;
+	//if (esc_telemetry.battery_level < 0.0) esc_telemetry.battery_level = 1.0;
 	uint8_t board_batt_pixel = map(esc_telemetry.battery_level * 100, 0, 100, board_batt_x1, board_batt_x1 + board_batt_width);
 	//TODO board_batt_pixel_previous
 	if (board_batt_pixel_previous != board_batt_pixel)
