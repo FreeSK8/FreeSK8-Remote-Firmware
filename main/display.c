@@ -156,9 +156,6 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height) 
 	uint8_t ascii[24];
 	uint16_t color;
 
-	lcdSetFontFill(dev, BLACK);
-
-
 	//Remote Battery
 	const uint8_t batt_height = 20;
 	uint8_t batt_pixel = map(adc_raw_battery_level, adc_raw_battery_minimum, adc_raw_battery_maximum, 10, 80); //Scale battery %
@@ -241,9 +238,9 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height) 
 		lcdDrawFillRect(dev, board_batt_x1 + 1/*left*/, board_batt_y1 + 1/*down*/, board_batt_pixel /*width*/, board_batt_y2 -2 /*height*/, color); //Draw battery %
 		lcdDrawFillRect(dev, board_batt_pixel + 1/*left*/, board_batt_y1 + 1/*down*/, board_batt_pixel + (board_batt_width-board_batt_pixel+board_batt_x1) /*width*/, board_batt_y2 -2 /*height*/, BLACK); //Clear empty space
 
-lcdUnsetFontFill(dev);
 		if (esc_telemetry.battery_level * 100 < 45) color = WHITE;
 		else color = BLACK;
+		lcdUnsetFontFill(dev);
 		lcdDrawString(dev, fx, xpos, ypos, ascii, color);
 	}
 
@@ -259,6 +256,7 @@ lcdUnsetFontFill(dev);
 			lcdSetFontDirection(dev, DIRECTION0);
 		}
 		color = WHITE;
+		lcdSetFontFill(dev, BLACK);
 		lcdDrawString(dev, fx, xpos, ypos, ascii, color);
 	}
 
