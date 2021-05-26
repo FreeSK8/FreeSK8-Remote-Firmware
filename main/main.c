@@ -660,12 +660,12 @@ void ST7789_Task(void *pvParameters)
 			else if (accel_g_x > 0.95 && fabs(accel_g_y) < 0.04 && fabs(accel_g_z) < 0.04) {
 				//TODO: Pointing straight down
 				lcdFillScreen(&dev, BLACK);
-				drawScreenPrimary(&dev, fx16M, CONFIG_WIDTH, CONFIG_HEIGHT);
+				drawScreenPrimary(&dev, fx24G, CONFIG_WIDTH, CONFIG_HEIGHT);
 			}
 			else
 			{
 				// Most positions
-				drawScreenPrimary(&dev, fx16M, CONFIG_WIDTH, CONFIG_HEIGHT);
+				drawScreenPrimary(&dev, fx24G, CONFIG_WIDTH, CONFIG_HEIGHT);
 			}
 		}
 		else
