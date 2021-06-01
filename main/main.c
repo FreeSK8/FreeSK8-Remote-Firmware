@@ -634,10 +634,12 @@ void ST7789_Task(void *pvParameters)
 	lcdFillScreen(&dev, BLACK);
 
 	bool is_remote_idle = true;
+	bool is_display_visible = true;
 	uint8_t idle_delay = 0;
 	while(1) {
 
 		//drawScreenDeveloper(&dev, fx24M, CONFIG_WIDTH, CONFIG_HEIGHT);
+		// Check if remote is idle
 		const float delta_threshold = 0.025;
 		if (accel_g_x_delta > delta_threshold || accel_g_y_delta > delta_threshold || accel_g_z_delta > delta_threshold)
 		{
@@ -649,8 +651,18 @@ void ST7789_Task(void *pvParameters)
 			idle_delay = 0;
 			is_remote_idle = true;
 		}
+		// Check if remote is in a visible orientation
+		if (accel_g_x > accel_g_x_visible || accel_g_z > accel_g_z_visible)
+		{
+			is_display_visible = false;
+		}
+		else
+		{
+			is_display_visible = true;
+		}
 
-		if (!is_remote_idle)
+		// Display or not display? Lets save some power
+		if (!is_remote_idle && is_display_visible)
 		{
 			lcdBacklightOn(&dev);
 			if (accel_g_x < -0.95 && fabs(accel_g_y) < 0.04 && fabs(accel_g_z) < 0.04) {
