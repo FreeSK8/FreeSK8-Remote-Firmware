@@ -217,7 +217,7 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height) 
 	if (board_batt_pixel_previous != board_batt_pixel)
 	{
 		board_batt_pixel_previous = board_batt_pixel;
-		sprintf((char *)ascii, "%0.1f%%  ", esc_telemetry.battery_level * 100);
+		sprintf((char *)ascii, "%3.1fV", esc_telemetry.v_in);
 		{
 			ypos = board_batt_y2 - 6;
 			xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
