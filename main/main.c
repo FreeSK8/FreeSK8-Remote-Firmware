@@ -97,6 +97,7 @@ static void piezo_test(void *arg)
     // Initialize fade service.
     ledc_fade_func_install(0);
 
+	melody_play(MELODY_LOG_START, true);
     while (1) {
         if (accel_g_x > 1.75) {
 			//melody_play(MELODY_LOG_START, false);
@@ -107,7 +108,7 @@ static void piezo_test(void *arg)
 		if (accel_g_z > 1.75) {
 			//melody_play(MELODY_BLE_SUCCESS, false);
 		}
-		//melody_step();
+		melody_step();
 		
 		
 		vTaskDelay(10/portTICK_PERIOD_MS);
@@ -169,16 +170,11 @@ static void GPIO_Task(void* arg)
 				case GPIO_INPUT_IO_1:
 					gpio_switch_1 = !gpio_get_level(io_num);
 					printf("SW1 %d\n", gpio_switch_1);
-					if (gpio_switch_1 == 0)
+					if (gpio_switch_1)
 					{
-						//Turn LED ON
-						gpio_set_level(GPIO_OUTPUT_IO_0, 1);
+						if (!alert_visible) alert_show = true;
+						else alert_clear = true;
 					} 
-					else
-					{
-						//Turn LED OFF
-						gpio_set_level(GPIO_OUTPUT_IO_0, 0);
-					}
 				break;
 				case GPIO_INPUT_IO_2:
 					gpio_switch_2 = !gpio_get_level(io_num);
@@ -353,6 +349,7 @@ static void i2c_task(void *arg)
 
 #define PACKET_VESC						0
 TELEMETRY_DATA esc_telemetry;
+TELEMETRY_DATA esc_telemetry_last_fault;
 
 int uart_write_bytes();
 static void uart_send_buffer(unsigned char *data, unsigned int len) {
@@ -386,6 +383,9 @@ void process_packet_vesc(unsigned char *data, unsigned int len) {
 		esc_telemetry.num_vescs = data[index++];
 		esc_telemetry.battery_wh = buffer_get_float32(data, 1000.0, &index);
 
+		if (esc_telemetry.fault_code != FAULT_CODE_NONE) {
+			esc_telemetry_last_fault = esc_telemetry;
+		}
 		printf("temp esc %f\n", esc_telemetry.temp_mos);
 		printf("temp motor %f\n", esc_telemetry.temp_motor);
 		printf("current motor %f\n", esc_telemetry.current_motor);

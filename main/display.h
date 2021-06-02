@@ -30,6 +30,11 @@ extern int gpio_switch_detect;
 extern int gpio_usb_detect;
 
 extern TELEMETRY_DATA esc_telemetry;
+extern TELEMETRY_DATA esc_telemetry_last_fault;
+
+bool alert_show; // Is it time to display an alert
+bool alert_visible; // Has alert been displayed
+bool alert_clear; // Has alert been cleared by user input
 
 TickType_t drawScreenDeveloper(TFT_t * dev, FontxFile *fx, int width, int height);
 TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height);
