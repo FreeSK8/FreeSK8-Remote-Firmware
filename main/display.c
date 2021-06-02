@@ -139,6 +139,7 @@ const int adc_raw_rssi_minimum = 850;
 static uint8_t rssi_mapped_previous;
 static uint8_t batt_pixel_previous;
 static uint8_t board_batt_pixel_previous;
+static uint8_t gpio_usb_detect_previous;
 TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height) {
 	TickType_t startTick, endTick, diffTick;
 	startTick = xTaskGetTickCount();
@@ -169,12 +170,28 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height) 
 		lcdDrawFillRect(dev, 6/*left*/, 6/*down*/, batt_pixel /*width*/, batt_height -2 /*height*/, color); //Draw battery %
 		lcdDrawFillRect(dev, batt_pixel/*left*/, 6/*down*/, batt_pixel + (80-batt_pixel) /*width*/, batt_height -2 /*height*/, BLACK); //Clear empty space
 	}
+	// Remote is Charging
+	if (gpio_usb_detect != gpio_usb_detect_previous)
+	{
+		gpio_usb_detect_previous = gpio_usb_detect;
+		if (gpio_usb_detect) {
+			//TODO: Draw charging icon
+			//lcdDrawFillRect(dev, 90, 5, 100, 20, GREEN);
+			lcdDrawString(dev, fx, 90, 24, (unsigned char*)"+", RED);
+			lcdDrawString(dev, fx, 90, 25, (unsigned char*)"+", RED);
+		}
+		else
+		{
+			// Clear charging icon
+			lcdDrawFillRect(dev, 90, 5, 100, 20, BLACK);
+		}
+	}
 
 
 	//FAULT
 	if (esc_telemetry.fault_code != 0)
 	{
-		JPEGTest(dev, (char*)"/spiffs/map_fault.jpg", 25, 25, 100, 0);
+		JPEGTest(dev, (char*)"/spiffs/map_fault.jpg", 30, 30, 105, 0); //TODO: Replace graphic
 	}
 
 
@@ -244,35 +261,71 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height) 
 		lcdDrawString(dev, fx, xpos, ypos, ascii, color);
 	}
 
-
-	// Odometer
-	if (esc_telemetry.tachometer_abs != tachometer_abs_previous)
+	// Alert dialog vs Speed and Odom
+	if (alert_clear)
 	{
-		tachometer_abs_previous = esc_telemetry.tachometer_abs;
-		sprintf((char *)ascii, "%02.2fkm", esc_telemetry.tachometer_abs / 1000.0);
-		{
-			ypos = board_batt_y1 - 1;
-			xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
-			lcdSetFontDirection(dev, DIRECTION0);
-		}
+		alert_show = false;
+		alert_clear = false;
+		alert_visible = false;
+		lcdDrawFillRect(dev, 22, 42, 218, 198, BLACK);
+	}
+	if (alert_show && !alert_visible)
+	{
+		// Alert dialog
+		alert_visible = true;
+		lcdDrawFillRect(dev, 22, 42, 218, 198, BLACK);
+		lcdDrawRoundRect(dev, 22, 42, 218, 198, 6, PURPLE);
+		lcdDrawRoundRect(dev, 23, 43, 217, 197, 6, PURPLE);
+		lcdDrawRoundRect(dev, 24, 44, 216, 196, 6, PURPLE);
+
+		fontWidth = 2;
+		fontHeight = 2;
+		lcdSetFontDirection(dev, DIRECTION0);
+		sprintf((char *)ascii, "Fault");
+		ypos = 55;
+		xpos = (width - (strlen((char *)ascii) * 8 * fontWidth)) / 2;
+		color = YELLOW;
+		lcdDrawString2(dev, fontHeight, fontWidth, xpos, ypos, ascii, color);
+
+		GetFontx(fx, 0, buffer, &fontWidth, &fontHeight);
 		color = WHITE;
-		lcdSetFontFill(dev, BLACK);
+		sprintf((char *)ascii, "ESC ID %d", esc_telemetry_last_fault.vesc_id);
+		ypos = 115;
+		xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
+		lcdDrawString(dev, fx, xpos, ypos, ascii, color);
+
+		snprintf((char *)ascii, 15, "%s", mc_interface_fault_to_string(esc_telemetry_last_fault.fault_code));
+		ypos = 135;
+		xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
+		lcdDrawString(dev, fx, xpos, ypos, ascii, color);
+
+		color = GRAY;
+		sprintf((char *)ascii, "%0.1fV %0.0fA>%0.0fA", esc_telemetry_last_fault.v_in, esc_telemetry_last_fault.current_in, esc_telemetry_last_fault.current_motor);
+		ypos = 165;
+		xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
+		lcdDrawString(dev, fx, xpos, ypos, ascii, color);
+
+		sprintf((char *)ascii, "%0.0fC / %0.0fC", esc_telemetry_last_fault.temp_mos, esc_telemetry_last_fault.temp_motor);
+		ypos = 185;
+		xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
 		lcdDrawString(dev, fx, xpos, ypos, ascii, color);
 	}
-
-	// Speed big numbers
-	fontWidth = 9;
-	fontHeight = 8;
-	const float metersPerSecondToKph = 3.6;
-	const float kphToMph = 0.621371;
-	sprintf((char *)ascii, "%02d", (int)(esc_telemetry.speed * metersPerSecondToKph * kphToMph));
+	else if (!alert_visible)
 	{
-		ypos = 42;
-		xpos = (width - (strlen((char *)ascii) * 8 * fontWidth)) / 2;
-		lcdSetFontDirection(dev, DIRECTION0);
+		// Speed big numbers
+		fontWidth = 9;
+		fontHeight = 8;
+		const float metersPerSecondToKph = 3.6;
+		const float kphToMph = 0.621371;
+		sprintf((char *)ascii, "%02d", (int)(esc_telemetry.speed * metersPerSecondToKph * kphToMph));
+		{
+			ypos = 42;
+			xpos = (width - (strlen((char *)ascii) * 8 * fontWidth)) / 2;
+			lcdSetFontDirection(dev, DIRECTION0);
+		}
+		color = YELLOW;
+		lcdDrawString2(dev, fontHeight, fontWidth, xpos, ypos, ascii, color);
 	}
-	color = YELLOW;
-	lcdDrawString2(dev, fontHeight, fontWidth, xpos, ypos, ascii, color);
 
 	endTick = xTaskGetTickCount();
 	diffTick = endTick - startTick;
