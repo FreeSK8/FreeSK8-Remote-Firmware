@@ -652,6 +652,8 @@ void ST7789_Task(void *pvParameters)
 			is_remote_idle = true;
 		}
 		// Check if remote is in a visible orientation
+		const float accel_g_x_visible = 0.5; //TODO: this is only for right handed bruce
+		const float accel_g_z_visible = 0.2; //TODO: this is only for right handed bruce
 		if (accel_g_x > accel_g_x_visible || accel_g_z > accel_g_z_visible)
 		{
 			is_display_visible = false;
