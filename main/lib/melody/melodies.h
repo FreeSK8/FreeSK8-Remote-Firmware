@@ -34,7 +34,7 @@ const int melody_gotchi_fault[] = {
 const int tempo_gotchi_fault=114;
 
 const int melody_esc_fault[] = {
-   NOTE_C5,-4, NOTE_C4,-4,
+   NOTE_C5,-4, NOTE_C4,-4, REST,4, REST,4, REST,4,
 };
 const int tempo_esc_fault = 100;
 

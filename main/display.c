@@ -312,12 +312,28 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height) 
 	}
 	else if (!alert_visible)
 	{
+		// Odometer
+		if (esc_telemetry.tachometer_abs != tachometer_abs_previous)
+		{
+			tachometer_abs_previous = esc_telemetry.tachometer_abs;
+			//TODO: Imperial selection: sprintf((char *)ascii, "%02.2fkm", esc_telemetry.tachometer_abs / 1000.0);
+			sprintf((char *)ascii, "%02.2fmi", esc_telemetry.tachometer_abs / 1000.0 * KTOM);
+			{
+				ypos = board_batt_y1 - 1;
+				xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
+				lcdSetFontDirection(dev, DIRECTION0);
+			}
+			color = WHITE;
+			lcdSetFontFill(dev, BLACK);
+			lcdDrawString(dev, fx, xpos, ypos, ascii, color);
+		}
+
 		// Speed big numbers
 		fontWidth = 9;
 		fontHeight = 8;
 		const float metersPerSecondToKph = 3.6;
-		const float kphToMph = 0.621371;
-		sprintf((char *)ascii, "%02d", (int)(esc_telemetry.speed * metersPerSecondToKph * kphToMph));
+		//TODO: Imperial selection: sprintf((char *)ascii, "%02d", (int)(esc_telemetry.speed * metersPerSecondToKph));
+		sprintf((char *)ascii, "%02d", (int)(esc_telemetry.speed * metersPerSecondToKph * KTOM));
 		{
 			ypos = 42;
 			xpos = (width - (strlen((char *)ascii) * 8 * fontWidth)) / 2;
