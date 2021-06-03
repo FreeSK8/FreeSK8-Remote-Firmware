@@ -697,6 +697,7 @@ void ST7789_Task(void *pvParameters)
 			lcdBacklightOn(&dev);
 			if (accel_g_x < -0.95 && fabs(accel_g_y) < 0.04 && fabs(accel_g_z) < 0.04) {
 				//TODO: Pointing straight up
+				melody_play(MELODY_STARTUP, false);
 			}
 			else if (accel_g_x > 0.95 && fabs(accel_g_y) < 0.04 && fabs(accel_g_z) < 0.04) {
 				//TODO: Pointing straight down
