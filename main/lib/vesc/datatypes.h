@@ -741,6 +741,8 @@ typedef enum {
 	NRF_PAIR_FAIL
 } NRF_PAIR_RES;
 
+#define KTOM 0.621371
+
 const char* mc_interface_fault_to_string(int fault);
 
 #endif /* DATATYPES_H_ */

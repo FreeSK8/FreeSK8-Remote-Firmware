@@ -23,6 +23,7 @@ void set_frequency_and_duty_cycle(uint32_t frequency, uint32_t duty_cycle_percen
         ///printf("frequency result: %d\n", result);
     } else {
         ledc_stop(LEDC_HIGH_SPEED_MODE, LEDC_CHANNEL, 0);
+		return;
     }
     
     result = ledc_set_duty(LEDC_HIGH_SPEED_MODE, LEDC_CHANNEL, duty_cycle_percent);

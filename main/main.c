@@ -26,6 +26,9 @@ float accel_g_x, accel_g_x_delta;
 float accel_g_y, accel_g_y_delta;
 float accel_g_z, accel_g_z_delta;
 
+bool is_remote_idle = true;
+bool display_second_screen = false;
+bool display_blank_now = false;
 
 /* Piezo */
 #include "lib/melody/melody.h"
@@ -98,7 +101,29 @@ static void piezo_test(void *arg)
     ledc_fade_func_install(0);
 
 	melody_play(MELODY_LOG_START, true);
+	TickType_t startTick = xTaskGetTickCount();
+	TickType_t endTick, diffTick;
+	bool was_remote_idle = false;
     while (1) {
+		if (is_remote_idle)
+		{
+			if (!was_remote_idle)
+			{
+				was_remote_idle = true;
+				startTick = xTaskGetTickCount();
+			}
+			// Check if we've been idle for more than 5 minutes
+			endTick = xTaskGetTickCount();
+			diffTick = endTick - startTick;
+			if (diffTick*portTICK_RATE_MS > 5 * 60 * 1000)
+			{
+				melody_play(MELODY_ESC_FAULT, false);
+			}
+		}
+		else 
+		{
+			was_remote_idle = false;
+		}
         if (accel_g_x > 1.75) {
 			//melody_play(MELODY_LOG_START, false);
 		}
@@ -147,12 +172,12 @@ static void IRAM_ATTR gpio_isr_handler(void* arg)
     xQueueSendFromISR(gpio_evt_queue, &gpio_num, NULL);
 }
 
+TickType_t gpio_switch_1_time;
 int gpio_switch_1 = 0;
 int gpio_switch_2 = 0;
 int gpio_switch_3 = 0;
 int gpio_switch_detect = 0;
 int gpio_usb_detect = 0;
-TickType_t startTick, endTick, diffTick;
 static void GPIO_Task(void* arg)
 {
 	gpio_switch_3 = !gpio_get_level(GPIO_INPUT_IO_0);
@@ -162,6 +187,9 @@ static void GPIO_Task(void* arg)
 	gpio_usb_detect = !gpio_get_level(GPIO_INPUT_IO_4);
 
     uint32_t io_num;
+	TickType_t startTick = xTaskGetTickCount();
+	TickType_t endTick, diffTick;
+
     for(;;) {
         if(xQueueReceive(gpio_evt_queue, &io_num, portMAX_DELAY)) {
             printf("GPIO[%d] intr, val: %d\n", io_num, gpio_get_level(io_num));
@@ -172,8 +200,13 @@ static void GPIO_Task(void* arg)
 					printf("SW1 %d\n", gpio_switch_1);
 					if (gpio_switch_1)
 					{
-						if (!alert_visible) alert_show = true;
-						else alert_clear = true;
+						gpio_switch_1_time = xTaskGetTickCount(); //TODO: track time switch pressed to catch double click
+						if (alert_visible) alert_clear = true;
+						else
+						{
+							display_second_screen = !display_second_screen; //Switch between display views
+							display_blank_now = true;
+						}
 					} 
 				break;
 				case GPIO_INPUT_IO_2:
@@ -299,7 +332,7 @@ static void i2c_task(void *arg)
 {
 	mpu6050_acceleration_t accel;
 	float accel_bias[3] = {0, 0, 0};
-	float gyro_bias[3] = {0, 0, 0};
+	//float gyro_bias[3] = {0, 0, 0};
 
 	int8_t range = mpu6050_get_full_scale_accel_range();
 	float accel_res = mpu6050_get_accel_res(range);
@@ -385,6 +418,7 @@ void process_packet_vesc(unsigned char *data, unsigned int len) {
 
 		if (esc_telemetry.fault_code != FAULT_CODE_NONE) {
 			esc_telemetry_last_fault = esc_telemetry;
+			if (!alert_visible) alert_show = true;
 		}
 		printf("temp esc %f\n", esc_telemetry.temp_mos);
 		printf("temp motor %f\n", esc_telemetry.temp_motor);
@@ -624,21 +658,15 @@ void ST7789_Task(void *pvParameters)
 	lcdInversionOn(&dev);
 #endif
 
+	// FreeSK8 Logo
 	lcdFillScreen(&dev, BLACK);
-#if 0
-		char file[32];
-		strcpy(file, "/spiffs/esp32.jpeg");
-		JPEGTest(&dev, file, CONFIG_WIDTH, CONFIG_HEIGHT);
-		vTaskDelay(1000/10);
-#endif
+	JPEGTest(&dev, (char*)"/spiffs/logo_badge.jpg", 206, 114, 17, 63);
+	vTaskDelay(3000/10);
 	lcdFillScreen(&dev, BLACK);
 
-	bool is_remote_idle = true;
 	bool is_display_visible = true;
 	uint8_t idle_delay = 0;
 	while(1) {
-
-		//drawScreenDeveloper(&dev, fx24M, CONFIG_WIDTH, CONFIG_HEIGHT);
 		// Check if remote is idle
 		const float delta_threshold = 0.025;
 		if (accel_g_x_delta > delta_threshold || accel_g_y_delta > delta_threshold || accel_g_z_delta > delta_threshold)
@@ -669,17 +697,26 @@ void ST7789_Task(void *pvParameters)
 			lcdBacklightOn(&dev);
 			if (accel_g_x < -0.95 && fabs(accel_g_y) < 0.04 && fabs(accel_g_z) < 0.04) {
 				//TODO: Pointing straight up
-				drawScreenDeveloper(&dev, fx24M, CONFIG_WIDTH, CONFIG_HEIGHT);
 			}
 			else if (accel_g_x > 0.95 && fabs(accel_g_y) < 0.04 && fabs(accel_g_z) < 0.04) {
 				//TODO: Pointing straight down
-				lcdFillScreen(&dev, BLACK);
-				drawScreenPrimary(&dev, fx24G, CONFIG_WIDTH, CONFIG_HEIGHT);
 			}
 			else
 			{
-				// Most positions
-				drawScreenPrimary(&dev, fx24G, CONFIG_WIDTH, CONFIG_HEIGHT);
+				if (display_blank_now)
+				{
+					display_blank_now = false;
+					lcdFillScreen(&dev, BLACK);
+				}
+				// Draw primary or secondary display
+				if (display_second_screen && !alert_visible)
+				{
+					drawScreenDeveloper(&dev, fx24M, CONFIG_WIDTH, CONFIG_HEIGHT);
+				}
+				else
+				{
+					drawScreenPrimary(&dev, fx24G, CONFIG_WIDTH, CONFIG_HEIGHT);
+				}
 			}
 		}
 		else
