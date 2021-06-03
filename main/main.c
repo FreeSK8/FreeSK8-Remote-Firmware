@@ -112,12 +112,15 @@ static void piezo_test(void *arg)
 				was_remote_idle = true;
 				startTick = xTaskGetTickCount();
 			}
-			// Check if we've been idle for more than 5 minutes
-			endTick = xTaskGetTickCount();
-			diffTick = endTick - startTick;
-			if (diffTick*portTICK_RATE_MS > 5 * 60 * 1000)
+			if (!gpio_usb_detect)
 			{
-				melody_play(MELODY_ESC_FAULT, false);
+				// Check if we've been idle for more than 5 minutes
+				endTick = xTaskGetTickCount();
+				diffTick = endTick - startTick;
+				if (diffTick*portTICK_RATE_MS > 5 * 60 * 1000)
+				{
+					melody_play(MELODY_ESC_FAULT, false);
+				}
 			}
 		}
 		else 
