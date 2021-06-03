@@ -191,7 +191,7 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height) 
 	//FAULT
 	if (esc_telemetry.fault_code != 0)
 	{
-		JPEGTest(dev, (char*)"/spiffs/map_fault.jpg", 30, 30, 105, 0); //TODO: Replace graphic
+		JPEGTest(dev, (char*)"/spiffs/map_fault.jpg", 25, 25, 107, 0);
 	}
 
 
