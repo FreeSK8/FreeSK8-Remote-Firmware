@@ -694,43 +694,41 @@ void ST7789_Task(void *pvParameters)
 			is_display_visible = true;
 		}
 
-		// Display or not display? Lets save some power
-		if (!is_remote_idle && is_display_visible)
+		// Switch the backlight to save power
+		if (is_remote_idle || !is_display_visible)
 		{
-			lcdBacklightOn(&dev);
-			if (accel_g_x < -0.95 && fabs(accel_g_y) < 0.04 && fabs(accel_g_z) < 0.04) {
-				//TODO: Pointing straight up
-				melody_play(MELODY_STARTUP, false);
-			}
-			else if (accel_g_x > 0.95 && fabs(accel_g_y) < 0.04 && fabs(accel_g_z) < 0.04) {
-				//TODO: Pointing straight down
-			}
-			else
-			{
-				if (display_blank_now)
-				{
-					display_blank_now = false;
-					lcdFillScreen(&dev, BLACK);
-				}
-				// Draw primary or secondary display
-				if (display_second_screen && !alert_visible)
-				{
-					drawScreenDeveloper(&dev, fx24M, CONFIG_WIDTH, CONFIG_HEIGHT);
-				}
-				else
-				{
-					drawScreenPrimary(&dev, fx24G, CONFIG_WIDTH, CONFIG_HEIGHT);
-				}
-			}
+			lcdBacklightOff(&dev);
 		}
 		else
 		{
-			//lcdFillScreen(&dev, BLACK);
-			lcdBacklightOff(&dev);
-			vTaskDelay(100/10);
+			lcdBacklightOn(&dev);
 		}
 
-		vTaskDelay(10/10);
+		// Draw a blank screen when the remote is idle
+		if (is_remote_idle)
+		{
+			lcdFillScreen(&dev, BLACK);
+		}
+		else
+		// Draw the good stuff otherwise
+		{
+			if (display_blank_now)
+			{
+				display_blank_now = false;
+				lcdFillScreen(&dev, BLACK);
+			}
+			// Draw primary or secondary display
+			if (display_second_screen && !alert_visible)
+			{
+				drawScreenDeveloper(&dev, fx24M, CONFIG_WIDTH, CONFIG_HEIGHT);
+			}
+			else
+			{
+				drawScreenPrimary(&dev, fx24G, CONFIG_WIDTH, CONFIG_HEIGHT);
+			}
+		}
+
+		vTaskDelay(10/portTICK_PERIOD_MS);
 	}
 }
 
