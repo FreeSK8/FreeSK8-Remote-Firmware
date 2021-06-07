@@ -14,7 +14,7 @@ int melody_last_alert_index = MELODY_NONE;
 uint16_t melody_snooze_seconds = 0;
 
 #define LEDC_CHANNEL 0
-void set_frequency_and_duty_cycle(uint32_t frequency, uint32_t duty_cycle_percent)
+esp_err_t set_frequency_and_duty_cycle(uint32_t frequency, uint32_t duty_cycle_percent)
 {
     esp_err_t result;
     if (frequency != 0)
@@ -22,13 +22,14 @@ void set_frequency_and_duty_cycle(uint32_t frequency, uint32_t duty_cycle_percen
         result = ledc_set_freq(LEDC_HIGH_SPEED_MODE, LEDC_CHANNEL, frequency);
         ///printf("frequency result: %d\n", result);
     } else {
-        ledc_stop(LEDC_HIGH_SPEED_MODE, LEDC_CHANNEL, 0);
-		return;
+        result = ledc_stop(LEDC_HIGH_SPEED_MODE, LEDC_CHANNEL, 0);
+		return result;
     }
     
     result = ledc_set_duty(LEDC_HIGH_SPEED_MODE, LEDC_CHANNEL, duty_cycle_percent);
     ///printf("duty result: %d\n", result);
     ledc_update_duty(LEDC_HIGH_SPEED_MODE, LEDC_CHANNEL);
+	return result;
 }
 
 uint64_t millis(void)
