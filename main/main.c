@@ -271,9 +271,9 @@ static void gpio_init_remote()
 
 	/// Turn LED on with a blink
 	gpio_set_level(GPIO_OUTPUT_IO_0, 1);
-	vTaskDelay(500/10);
+	vTaskDelay(500/portTICK_PERIOD_MS);
 	gpio_set_level(GPIO_OUTPUT_IO_0, 0);
-	vTaskDelay(500/10);
+	vTaskDelay(500/portTICK_PERIOD_MS);
 	gpio_set_level(GPIO_OUTPUT_IO_0, 1);
 
 	/// INPUTS
@@ -389,9 +389,7 @@ TELEMETRY_DATA esc_telemetry_last_fault;
 
 int uart_write_bytes();
 static void uart_send_buffer(unsigned char *data, unsigned int len) {
-	for (int i = 0;i < len;i++) {
-		uart_write_bytes(0/*XBEE_UART_PORT_NUM*/, data, len);
-	}
+	uart_write_bytes(1/*TODO: undefined: XBEE_UART_PORT_NUM*/, data, len);
 }
 void process_packet_vesc(unsigned char *data, unsigned int len) {
 
@@ -437,9 +435,26 @@ void process_packet_vesc(unsigned char *data, unsigned int len) {
 /* VESC */
 
 /* XBEE/UART */
+#include "espnow.h"
+
+#include "driver/uart.h"
+#include "lib/vesc/buffer.h"
+#include "lib/vesc/crc.h"
+
+#define XBEE_TXD 16
+#define XBEE_RXD 17
+#define XBEE_BAUD 115200
+#define XBEE_UART_PORT_NUM 1
+#define XBEE_BUF_SIZE (1024)
+
 bool remote_in_pairing_mode = false;
-uint8_t remote_xbee_ch = 0x0B; // Valid range 0x0B - 0x1A
+uint8_t remote_xbee_ch = 0x0B; // Valid range 0x0B - 0x1A (11-26)
 uint16_t remote_xbee_id = 0x7FFF; // Valid range 0x0 - 0xFFFF
+
+static void xbee_send_string(unsigned char *data) {
+	unsigned int len = strlen((char*)data);
+	uart_write_bytes(XBEE_UART_PORT_NUM, data, len);
+}
 
 #include "esp_wifi.h"
 #include "nvs_flash.h"
@@ -454,6 +469,10 @@ void xbee_init(void)
 
 	remote_xbee_id = mac_long % 0xFFFF;
 	printf("XBEE ID 0x%04x\n", remote_xbee_id);
+
+	remote_xbee_ch = mac_long % 0x1A;
+	if (remote_xbee_ch < 0x0B) remote_xbee_ch += 0x0B;
+	printf("XBEE CH 0x%02x\n", remote_xbee_ch);
 }
 /* WiFi should start before using ESPNOW */
 static void example_wifi_init(void)
@@ -461,30 +480,17 @@ static void example_wifi_init(void)
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK( esp_wifi_init(&cfg) );
-    ESP_ERROR_CHECK( esp_wifi_set_storage(WIFI_STORAGE_RAM) );
-    ESP_ERROR_CHECK( esp_wifi_set_mode(ESP_IF_WIFI_AP) );
-    ESP_ERROR_CHECK( esp_wifi_start());
+    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+    ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
+    ESP_ERROR_CHECK(esp_wifi_set_mode(ESP_IF_WIFI_AP));
+    ESP_ERROR_CHECK(esp_wifi_start());
 }
-
-#include "driver/uart.h"
-#include "lib/vesc/buffer.h"
-#include "lib/vesc/crc.h"
-
-#define XBEE_TXD 16
-#define XBEE_RXD 17
-#define XBEE_BAUD 115200
-#define XBEE_UART_PORT_NUM 1
-#define XBEE_BUF_SIZE (1024)
 
 void setNunchuckValues();
 int packSendPayload(uint8_t * payload, int lenPay);
 
 static void xbee_task(void *arg)
 {
-	//example_wifi_init();
-	//xbee_init();
-
     /* Configure parameters of an UART driver,
      * communication pins and install the driver */
     uart_config_t uart_config = {
@@ -518,7 +524,39 @@ static void xbee_task(void *arg)
 
 		if (remote_in_pairing_mode)
 		{
-			printf("TODO: pairing mode\n");
+			printf("Entering Pairing Mode\n");
+
+			printf("Configuring radio\n");
+
+			// TODO: Do we really have to kill 2 seconds?
+			vTaskDelay(1000/portTICK_PERIOD_MS);
+			xbee_send_string((unsigned char *)"+++");
+			vTaskDelay(1000/portTICK_PERIOD_MS);
+			//TODO: Check for OK message from XBEE
+
+			unsigned char write_data[10] = {0};
+			sprintf((char*)write_data, "ATCH%02x\n", remote_xbee_ch);
+			xbee_send_string(write_data);
+
+			sprintf((char*)write_data, "ATID%04x\n", remote_xbee_id);
+			xbee_send_string(write_data);
+
+			xbee_send_string((unsigned char*)"ATDH0\n"); // Destination High is 0
+			xbee_send_string((unsigned char*)"ATDL2\n"); // Destination Low is #2
+			xbee_send_string((unsigned char*)"ATMY1\n"); // My Address is #1
+			xbee_send_string((unsigned char*)"ATBD7\n"); // Baud 115200
+			xbee_send_string((unsigned char*)"ATD70\n"); // Digital IO7 is Disabled
+			xbee_send_string((unsigned char*)"ATCN\n"); // Exit Command mode
+
+			printf("Starting ESPNOW\n");
+			// Start the ESPNOW server
+			//TODO: Pass XBEE CH, ID, MY>DL for transmission
+			example_espnow_init();
+			//TODO: ESPNOW init will return when complete
+
+			printf("Exiting Pairing Mode\n");
+			// Pairing complete
+			remote_in_pairing_mode = false;
 		}
 		else
 		{
@@ -664,7 +702,7 @@ void ST7789_Task(void *pvParameters)
 	// FreeSK8 Logo
 	lcdFillScreen(&dev, BLACK);
 	JPEGTest(&dev, (char*)"/spiffs/logo_badge.jpg", 206, 114, 17, 63);
-	vTaskDelay(3000/10);
+	vTaskDelay(3000/portTICK_PERIOD_MS);
 	lcdFillScreen(&dev, BLACK);
 
 	bool is_display_visible = true;
@@ -804,8 +842,10 @@ void app_main(void)
         ret = nvs_flash_init();
     }
     ESP_ERROR_CHECK( ret );
-	example_wifi_init();
-	xbee_init();
+
+	//TODO: from espnow example, execute after nvs_flash_init
+	example_wifi_init(); // TODO: Only needed for pairing mode
+	xbee_init(); // TODO: Only needed for pairing mode
 
 /* ESPNOW/Wifi */
 
