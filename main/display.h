@@ -18,6 +18,10 @@
 #include "lib/vesc/datatypes.h"
 
 extern bool remote_in_pairing_mode;
+extern char str_pairing_1[15];
+extern char str_pairing_2[15];
+extern char str_pairing_3[15];
+extern char str_pairing_4[15];
 
 extern uint16_t adc_raw_joystick;
 extern uint16_t adc_raw_joystick_2;

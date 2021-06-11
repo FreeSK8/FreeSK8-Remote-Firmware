@@ -82,6 +82,6 @@ typedef struct {
 } example_espnow_send_param_t;
 
 
-esp_err_t example_espnow_init(void);
+esp_err_t example_espnow_init(u_int8_t xbee_ch, u_int16_t xbee_id);
 
 #endif

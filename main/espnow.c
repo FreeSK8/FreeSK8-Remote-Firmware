@@ -153,7 +153,7 @@ static esp_err_t example_espnow_task(void *pvParameter)
     bool is_broadcast = false;
     int ret;
 
-    vTaskDelay(5000 / portTICK_RATE_MS);
+    vTaskDelay(5000 / portTICK_RATE_MS); //TODO: 5 seconds, what the hey example?
     ESP_LOGI(TAG, "Start sending broadcast data");
 
     /* Start sending broadcast ESPNOW data. */
@@ -164,6 +164,7 @@ static esp_err_t example_espnow_task(void *pvParameter)
         vTaskDelete(NULL);
     }
 
+    int TODOLimitTaskIterations = 0;
     while (xQueueReceive(s_example_espnow_queue, &evt, portMAX_DELAY) == pdTRUE) {
         switch (evt.id) {
             case EXAMPLE_ESPNOW_SEND_CB:
@@ -172,6 +173,7 @@ static esp_err_t example_espnow_task(void *pvParameter)
                 is_broadcast = IS_BROADCAST_ADDR(send_cb->mac_addr);
 
                 ESP_LOGD(TAG, "Send data to "MACSTR", status1: %d", MAC2STR(send_cb->mac_addr), send_cb->status);
+                if (++TODOLimitTaskIterations > 20) return ESP_OK;
 
                 if (is_broadcast && (send_param->broadcast == false)) {
                     break;
@@ -284,7 +286,7 @@ static esp_err_t example_espnow_task(void *pvParameter)
     return ESP_OK;
 }
 
-esp_err_t example_espnow_init(void)
+esp_err_t example_espnow_init(u_int8_t xbee_ch, u_int16_t xbee_id)
 {
     example_espnow_send_param_t *send_param;
 
@@ -370,5 +372,5 @@ void example_main(void)
     ESP_ERROR_CHECK( ret );
 
     example_wifi_init();
-    example_espnow_init();
+    example_espnow_init(0x0, 0x0);
 }

@@ -453,6 +453,10 @@ void process_packet_vesc(unsigned char *data, unsigned int len) {
 #define XBEE_UART_PORT_NUM 1
 #define XBEE_BUF_SIZE (1024)
 
+char str_pairing_1[15] = {0};
+char str_pairing_2[15] = {0};
+char str_pairing_3[15] = {0};
+char str_pairing_4[15] = {0};
 bool remote_in_pairing_mode = false;
 uint8_t remote_xbee_ch = 0x0B; // Valid range 0x0B - 0x1A (11-26)
 uint16_t remote_xbee_id = 0x7FFF; // Valid range 0x0 - 0xFFFF
@@ -569,34 +573,68 @@ static void xbee_task(void *arg)
 			vTaskDelay(1000/portTICK_PERIOD_MS);
 			xbee_send_string((unsigned char *)"+++");
 			//TODO: Check for OK message from XBEE at all baud rates
-			xbee_wait_ok(data, true);
+			if (!xbee_wait_ok(data, false)) {
+				sprintf(str_pairing_1, "Radio did not");
+				sprintf(str_pairing_2, "respond");
+				sprintf(str_pairing_3, "Power cycle to");
+				sprintf(str_pairing_4, "try again");
+				while(1) {
+					vTaskDelay(100/portTICK_PERIOD_MS);
+				}
+			} else {
+				sprintf(str_pairing_1, "Radio OK");
+			}
 			ESP_LOGI(__FUNCTION__,"XBEE READY");
 
+			bool configuration_success = true;
 			unsigned char write_data[10] = {0};
 			sprintf((char*)write_data, "ATCH%02x\r", remote_xbee_ch);
 			xbee_send_string(write_data);
+			if (configuration_success) configuration_success = xbee_wait_ok(data, false);
 
 			sprintf((char*)write_data, "ATID%04x\r", remote_xbee_id);
 			xbee_send_string(write_data);
+			if (configuration_success) configuration_success = xbee_wait_ok(data, false);
 
 			xbee_send_string((unsigned char*)"ATDH0\r"); // Destination High is 0
-			xbee_wait_ok(data, true); ESP_LOGI(__FUNCTION__,"ATCH");
+			if (configuration_success) configuration_success = xbee_wait_ok(data, false);
+
 			xbee_send_string((unsigned char*)"ATDL2\r"); // Destination Low is #2
-			xbee_wait_ok(data, true); ESP_LOGI(__FUNCTION__,"ATDL");
+			if (configuration_success) configuration_success = xbee_wait_ok(data, false);
+
 			xbee_send_string((unsigned char*)"ATMY1\r"); // My Address is #1
-			xbee_wait_ok(data, true); ESP_LOGI(__FUNCTION__,"ATMY");
+			if (configuration_success) configuration_success = xbee_wait_ok(data, false);
+
 			xbee_send_string((unsigned char*)"ATBD7\r"); // Baud 115200
-			xbee_wait_ok(data, true); ESP_LOGI(__FUNCTION__,"ATBD");
+			if (configuration_success) configuration_success = xbee_wait_ok(data, false);
+
 			xbee_send_string((unsigned char*)"ATD70\r"); // Digital IO7 is Disabled
-			xbee_wait_ok(data, true); ESP_LOGI(__FUNCTION__,"ATD7");
+			if (configuration_success) configuration_success = xbee_wait_ok(data, false);
+
 			xbee_send_string((unsigned char*)"ATCN\r"); // Exit Command mode
-			xbee_wait_ok(data, true); ESP_LOGI(__FUNCTION__,"ATCN");
+			if (configuration_success) configuration_success = xbee_wait_ok(data, false);
+
+			if (configuration_success) {
+				sprintf(str_pairing_2, "Config OK");
+				sprintf(str_pairing_3, "Searching for");
+				sprintf(str_pairing_4, "receiver");
+			} else {
+				sprintf(str_pairing_2, "Config Failed");
+				while(1) {
+					vTaskDelay(100/portTICK_PERIOD_MS);
+				}
+			}
 
 			printf("Starting ESPNOW\n");
 			// Start the ESPNOW server
 			//TODO: Pass XBEE CH, ID, MY>DL for transmission
-			example_espnow_init(); //TODO: timeout on this to abort pairing mode?
+			example_espnow_init(remote_xbee_ch, remote_xbee_id); //TODO: timeout on this to abort pairing mode?
 			//TODO: ESPNOW init will return when complete
+			display_blank_now = true;
+			sprintf(str_pairing_3, "Pairing was");
+			sprintf(str_pairing_4, "Successful");
+
+			vTaskDelay(10000/portTICK_PERIOD_MS);
 
 			printf("Exiting Pairing Mode\n");
 			// Pairing complete
@@ -756,7 +794,13 @@ void ST7789_Task(void *pvParameters)
 		if (remote_in_pairing_mode)
 		{
 			lcdBacklightOn(&dev);
+			if (display_blank_now)
+			{
+				display_blank_now = false;
+				lcdFillScreen(&dev, BLACK);
+			}
 			drawScreenPairing(&dev, fx24G, CONFIG_WIDTH, CONFIG_HEIGHT);
+			vTaskDelay(10/portTICK_PERIOD_MS);
 			continue;
 		}
 		// Check if remote is idle

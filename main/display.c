@@ -448,23 +448,25 @@ TickType_t drawScreenPairing(TFT_t * dev, FontxFile *fx, int width, int height) 
 
 	GetFontx(fx, 0, buffer, &fontWidth, &fontHeight);
 	color = WHITE;
-	sprintf((char *)ascii, "Step 1");
+	sprintf((char *)ascii, "%s", str_pairing_1);
 	ypos = 115;
 	xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
 	lcdDrawString(dev, fx, xpos, ypos, ascii, color);
 
-	sprintf((char *)ascii, "Step 2");
+	sprintf((char *)ascii, "%s", str_pairing_2);
 	ypos = 135;
 	xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
 	lcdDrawString(dev, fx, xpos, ypos, ascii, color);
 
+	//lcdDrawFillRect(dev, 25, 135, 215, 190, BLACK);
+
 	color = GRAY;
-	sprintf((char *)ascii, "Step 3");
+	sprintf((char *)ascii, "%s", str_pairing_3);
 	ypos = 165;
 	xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
 	lcdDrawString(dev, fx, xpos, ypos, ascii, color);
 
-	sprintf((char *)ascii, "Step 4");
+	sprintf((char *)ascii, "%s", str_pairing_4);
 	ypos = 185;
 	xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
 	lcdDrawString(dev, fx, xpos, ypos, ascii, color);
