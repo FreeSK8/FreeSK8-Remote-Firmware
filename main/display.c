@@ -411,3 +411,66 @@ TickType_t JPEGTest(TFT_t * dev, char * file, int width, int height, int offset_
 	ESP_LOGI(__FUNCTION__, "elapsed time[ms]:%d",diffTick*portTICK_RATE_MS);
 	return diffTick;
 }
+
+TickType_t drawScreenPairing(TFT_t * dev, FontxFile *fx, int width, int height) {
+	TickType_t startTick, endTick, diffTick;
+	startTick = xTaskGetTickCount();
+
+	// get font width & height
+	uint8_t buffer[FontxGlyphBufSize];
+	uint8_t fontWidth = 9;
+	uint8_t fontHeight = 9;
+	GetFontx(fx, 0, buffer, &fontWidth, &fontHeight);
+	//ESP_LOGI(__FUNCTION__,"fontWidth=%d fontHeight=%d",fontWidth,fontHeight);
+
+	uint16_t xpos;
+	uint16_t ypos;
+	//int	stlen;
+	uint8_t ascii[24];
+	uint16_t color;
+
+
+	// Pairing dialog
+	alert_visible = true;
+	//lcdDrawFillRect(dev, 22, 42, 218, 198, BLACK);
+	lcdDrawRoundRect(dev, 22, 42, 218, 198, 6, PURPLE);
+	lcdDrawRoundRect(dev, 23, 43, 217, 197, 6, PURPLE);
+	lcdDrawRoundRect(dev, 24, 44, 216, 196, 6, PURPLE);
+
+	fontWidth = 2;
+	fontHeight = 2;
+	lcdSetFontDirection(dev, DIRECTION0);
+	sprintf((char *)ascii, "Pairing");
+	ypos = 55;
+	xpos = (width - (strlen((char *)ascii) * 8 * fontWidth)) / 2;
+	color = YELLOW;
+	lcdDrawString2(dev, fontHeight, fontWidth, xpos, ypos, ascii, color);
+
+	GetFontx(fx, 0, buffer, &fontWidth, &fontHeight);
+	color = WHITE;
+	sprintf((char *)ascii, "Step 1");
+	ypos = 115;
+	xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
+	lcdDrawString(dev, fx, xpos, ypos, ascii, color);
+
+	sprintf((char *)ascii, "Step 2");
+	ypos = 135;
+	xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
+	lcdDrawString(dev, fx, xpos, ypos, ascii, color);
+
+	color = GRAY;
+	sprintf((char *)ascii, "Step 3");
+	ypos = 165;
+	xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
+	lcdDrawString(dev, fx, xpos, ypos, ascii, color);
+
+	sprintf((char *)ascii, "Step 4");
+	ypos = 185;
+	xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
+	lcdDrawString(dev, fx, xpos, ypos, ascii, color);
+
+	endTick = xTaskGetTickCount();
+	diffTick = endTick - startTick;
+	//ESP_LOGI(__FUNCTION__, "elapsed time[ms]:%d",diffTick*portTICK_RATE_MS);
+	return diffTick;
+}

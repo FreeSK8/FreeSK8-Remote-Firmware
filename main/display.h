@@ -17,6 +17,8 @@
 
 #include "lib/vesc/datatypes.h"
 
+extern bool remote_in_pairing_mode;
+
 extern uint16_t adc_raw_joystick;
 extern uint16_t adc_raw_joystick_2;
 extern uint16_t adc_raw_battery_level;
@@ -37,6 +39,7 @@ bool alert_visible; // Has alert been displayed
 bool alert_clear; // Has alert been cleared by user input
 
 TickType_t drawScreenDeveloper(TFT_t * dev, FontxFile *fx, int width, int height);
+TickType_t drawScreenPairing(TFT_t * dev, FontxFile *fx, int width, int height);
 TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height);
 TickType_t JPEGTest(TFT_t * dev, char * file, int width, int height, int offset_x, int offset_y);
 
