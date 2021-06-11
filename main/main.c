@@ -298,6 +298,12 @@ static void gpio_init_remote()
 	//gpio_set_intr_type(GPIO_INPUT_IO_3, GPIO_INTR_ANYEDGE);
 	//gpio_set_intr_type(GPIO_INPUT_IO_4, GPIO_INTR_ANYEDGE);
 
+	// Check if we are to enter pairing mode
+	if (!gpio_get_level(GPIO_INPUT_IO_1))
+	{
+		remote_in_pairing_mode = true;
+	}
+
     //create a queue to handle gpio event from isr
     gpio_evt_queue = xQueueCreate(10, sizeof(uint32_t));
     //start gpio task
@@ -344,11 +350,11 @@ static void i2c_task(void *arg)
 	while(1)
 	{
 		/* Program State */
-		printf("SW1:%d SW2:%d SW3:%d USB:%d JOY1:%04d JOY2:%04d BATT:%04d RSSI:%04d ", gpio_switch_1, gpio_switch_2, gpio_switch_3, gpio_usb_detect, adc_raw_joystick, adc_raw_joystick_2, adc_raw_battery_level, adc_raw_rssi);
+		if (!remote_in_pairing_mode) printf("SW1:%d SW2:%d SW3:%d USB:%d JOY1:%04d JOY2:%04d BATT:%04d RSSI:%04d ", gpio_switch_1, gpio_switch_2, gpio_switch_3, gpio_usb_detect, adc_raw_joystick, adc_raw_joystick_2, adc_raw_battery_level, adc_raw_rssi);
 		/* ADC */
 		adc_raw_joystick = ADS1015_readADC_SingleEnded(0);
 		joystick_value_mapped = map(adc_raw_joystick, 2, 1632, 0, 255);
-		printf("Throttle = %d ", joystick_value_mapped);
+		if (!remote_in_pairing_mode) printf("Throttle = %d ", joystick_value_mapped);
 
 		adc_raw_battery_level = ADS1015_readADC_SingleEnded(1);
 		adc_raw_joystick_2 = ADS1015_readADC_SingleEnded(2);
@@ -370,7 +376,7 @@ static void i2c_task(void *arg)
 		accel_g_y = accel_gy;
 		accel_g_z = accel_gz;
 
-		printf("accel G x%02f y%02f z%02f\n", accel_g_x, accel_g_y, accel_g_z);
+		if (!remote_in_pairing_mode) printf("accel G x%02f y%02f z%02f\n", accel_g_x, accel_g_y, accel_g_z);
 
 
 	}
@@ -489,6 +495,38 @@ static void example_wifi_init(void)
 void setNunchuckValues();
 int packSendPayload(uint8_t * payload, int lenPay);
 
+static bool xbee_wait_ok(uint8_t *data, bool is_fatal)
+{
+	TickType_t startTick = xTaskGetTickCount();
+	TickType_t endTick, diffTick;
+	bool receivedOK = false;
+	bool receivedO = false;
+	bool receivedK = false;
+	endTick = xTaskGetTickCount();
+	diffTick = endTick - startTick;
+	while(!receivedOK && diffTick*portTICK_RATE_MS < 1500)
+	{
+		int length = uart_read_bytes(XBEE_UART_PORT_NUM, data, XBEE_BUF_SIZE, 20 / portTICK_RATE_MS);
+		if (length) {
+			for (int i = 0; i < length; i++) {
+				if (data[i] == 0x4F) receivedO = true;
+				if (data[i] == 0x4B) receivedK = true;
+			}
+		}
+		if (receivedO && receivedK) receivedOK = true;
+
+		endTick = xTaskGetTickCount();
+		diffTick = endTick - startTick;
+	}
+	if (is_fatal && !receivedOK)
+	{
+		ESP_LOGE(__FUNCTION__,"XBEE did not OK! Haulting");
+		while(1) {
+			vTaskDelay(1000/portTICK_PERIOD_MS);
+		}
+	}
+	return receivedOK;
+}
 static void xbee_task(void *arg)
 {
     /* Configure parameters of an UART driver,
@@ -524,34 +562,40 @@ static void xbee_task(void *arg)
 
 		if (remote_in_pairing_mode)
 		{
-			printf("Entering Pairing Mode\n");
+			ESP_LOGI(__FUNCTION__,"Entering Pairing Mode");
 
-			printf("Configuring radio\n");
+			ESP_LOGI(__FUNCTION__,"Configuring radio");
 
-			// TODO: Do we really have to kill 2 seconds?
 			vTaskDelay(1000/portTICK_PERIOD_MS);
 			xbee_send_string((unsigned char *)"+++");
-			vTaskDelay(1000/portTICK_PERIOD_MS);
-			//TODO: Check for OK message from XBEE
+			//TODO: Check for OK message from XBEE at all baud rates
+			xbee_wait_ok(data, true);
+			ESP_LOGI(__FUNCTION__,"XBEE READY");
 
 			unsigned char write_data[10] = {0};
-			sprintf((char*)write_data, "ATCH%02x\n", remote_xbee_ch);
+			sprintf((char*)write_data, "ATCH%02x\r", remote_xbee_ch);
 			xbee_send_string(write_data);
 
-			sprintf((char*)write_data, "ATID%04x\n", remote_xbee_id);
+			sprintf((char*)write_data, "ATID%04x\r", remote_xbee_id);
 			xbee_send_string(write_data);
 
-			xbee_send_string((unsigned char*)"ATDH0\n"); // Destination High is 0
-			xbee_send_string((unsigned char*)"ATDL2\n"); // Destination Low is #2
-			xbee_send_string((unsigned char*)"ATMY1\n"); // My Address is #1
-			xbee_send_string((unsigned char*)"ATBD7\n"); // Baud 115200
-			xbee_send_string((unsigned char*)"ATD70\n"); // Digital IO7 is Disabled
-			xbee_send_string((unsigned char*)"ATCN\n"); // Exit Command mode
+			xbee_send_string((unsigned char*)"ATDH0\r"); // Destination High is 0
+			xbee_wait_ok(data, true); ESP_LOGI(__FUNCTION__,"ATCH");
+			xbee_send_string((unsigned char*)"ATDL2\r"); // Destination Low is #2
+			xbee_wait_ok(data, true); ESP_LOGI(__FUNCTION__,"ATDL");
+			xbee_send_string((unsigned char*)"ATMY1\r"); // My Address is #1
+			xbee_wait_ok(data, true); ESP_LOGI(__FUNCTION__,"ATMY");
+			xbee_send_string((unsigned char*)"ATBD7\r"); // Baud 115200
+			xbee_wait_ok(data, true); ESP_LOGI(__FUNCTION__,"ATBD");
+			xbee_send_string((unsigned char*)"ATD70\r"); // Digital IO7 is Disabled
+			xbee_wait_ok(data, true); ESP_LOGI(__FUNCTION__,"ATD7");
+			xbee_send_string((unsigned char*)"ATCN\r"); // Exit Command mode
+			xbee_wait_ok(data, true); ESP_LOGI(__FUNCTION__,"ATCN");
 
 			printf("Starting ESPNOW\n");
 			// Start the ESPNOW server
 			//TODO: Pass XBEE CH, ID, MY>DL for transmission
-			example_espnow_init();
+			example_espnow_init(); //TODO: timeout on this to abort pairing mode?
 			//TODO: ESPNOW init will return when complete
 
 			printf("Exiting Pairing Mode\n");
@@ -708,6 +752,13 @@ void ST7789_Task(void *pvParameters)
 	bool is_display_visible = true;
 	uint8_t idle_delay = 0;
 	while(1) {
+		// Check for pairing mode
+		if (remote_in_pairing_mode)
+		{
+			lcdBacklightOn(&dev);
+			drawScreenPairing(&dev, fx24G, CONFIG_WIDTH, CONFIG_HEIGHT);
+			continue;
+		}
 		// Check if remote is idle
 		const float delta_threshold = 0.025;
 		if (accel_g_x_delta > delta_threshold || accel_g_y_delta > delta_threshold || accel_g_z_delta > delta_threshold)
