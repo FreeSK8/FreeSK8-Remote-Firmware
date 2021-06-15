@@ -356,7 +356,7 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height) 
 
 	endTick = xTaskGetTickCount();
 	diffTick = endTick - startTick;
-	ESP_LOGI(__FUNCTION__, "elapsed time[ms]:%d",diffTick*portTICK_RATE_MS);
+	//ESP_LOGI(__FUNCTION__, "elapsed time[ms]:%d",diffTick*portTICK_RATE_MS);
 	return diffTick;
 }
 
