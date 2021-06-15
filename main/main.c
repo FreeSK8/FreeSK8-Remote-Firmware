@@ -855,6 +855,7 @@ void ST7789_Task(void *pvParameters)
 			{
 				display_blank_now = false;
 				lcdFillScreen(&dev, BLACK);
+				resetPreviousValues();
 			}
 			// Draw primary or secondary display
 			if (display_second_screen && !alert_visible)
