@@ -128,18 +128,24 @@ TickType_t drawScreenDeveloper(TFT_t * dev, FontxFile *fx, int width, int height
 	return diffTick;
 }
 
-//static uint16_t adc_raw_battery_level_previous;
-//static uint16_t adc_raw_rssi_previous;
-//static double battery_level_previous;
-static int tachometer_abs_previous;
 const int adc_raw_battery_minimum = 825;
 const int adc_raw_battery_maximum = 1052;
 const int adc_raw_rssi_maximum = 1639;
 const int adc_raw_rssi_minimum = 850;
 static uint8_t rssi_mapped_previous;
 static uint8_t batt_pixel_previous;
-static uint8_t board_batt_pixel_previous;
 static uint8_t gpio_usb_detect_previous;
+static int tachometer_abs_previous;
+static double esc_vin_previous;
+
+void resetPreviousValues()
+{
+	tachometer_abs_previous = -1;
+	rssi_mapped_previous = 0;
+	batt_pixel_previous = 0;
+	gpio_usb_detect_previous = 0;
+	esc_vin_previous = 0;
+}
 TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height) {
 	TickType_t startTick, endTick, diffTick;
 	startTick = xTaskGetTickCount();
@@ -164,7 +170,7 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height) 
 	{
 		lcdDrawRect(dev, 5, 5, 82, batt_height, BLUE); //Draw outline //TODO: Only draw once to reduce render time
 		lcdDrawFillRect(dev, 82, batt_height -10, 86, batt_height -5, BLUE); //Draw nub //TODO: only once takes time blah blah
-		uint16_t color = GREEN;
+		color = GREEN;
 		if (batt_pixel < 30) color = RED;
 		else if (batt_pixel < 60) color = rgb565_conv(0xFF, 0xA5, 0x00);
 		lcdDrawFillRect(dev, 6/*left*/, 6/*down*/, batt_pixel /*width*/, batt_height -2 /*height*/, color); //Draw battery %
@@ -230,17 +236,12 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height) 
 	//esc_telemetry.battery_level -= 0.005;
 	//if (esc_telemetry.battery_level < 0.0) esc_telemetry.battery_level = 1.0;
 	uint8_t board_batt_pixel = map(esc_telemetry.battery_level * 100, 0, 100, board_batt_x1, board_batt_x1 + board_batt_width);
-	//TODO board_batt_pixel_previous
-	if (board_batt_pixel_previous != board_batt_pixel)
+	// Draw battery and voltage
+	if (esc_vin_previous != esc_telemetry.v_in)
 	{
-		board_batt_pixel_previous = board_batt_pixel;
-		sprintf((char *)ascii, "%3.1fV", esc_telemetry.v_in);
-		{
-			ypos = board_batt_y2 - 6;
-			xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
-			lcdSetFontDirection(dev, DIRECTION0);
-		}
-		color = WHITE;
+		esc_vin_previous = esc_telemetry.v_in;
+
+		// Battery
 
 		lcdDrawRect(dev, board_batt_x1, board_batt_y1, board_batt_x1 + board_batt_width+1, board_batt_y2, BLUE); //Draw outline //TODO: Only draw once to reduce render time
 		lcdDrawFillRect(dev,
@@ -249,14 +250,24 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height) 
 			board_batt_x1 + board_batt_width + 5, // 5 wide
 			board_batt_y2 - 5, // 5 above y2
 			BLUE); //Draw nub //TODO: only once takes time blah blah
-		uint16_t color = GREEN;
+		color = GREEN;
 		if (board_batt_pixel < (board_batt_width * 0.25) + board_batt_x1) color = RED;
 		else if (board_batt_pixel < (board_batt_width * 0.45) + board_batt_x1) color = rgb565_conv(0xFF, 0xA5, 0x00);
 		lcdDrawFillRect(dev, board_batt_x1 + 1/*left*/, board_batt_y1 + 1/*down*/, board_batt_pixel /*width*/, board_batt_y2 -2 /*height*/, color); //Draw battery %
 		lcdDrawFillRect(dev, board_batt_pixel + 1/*left*/, board_batt_y1 + 1/*down*/, board_batt_pixel + (board_batt_width-board_batt_pixel+board_batt_x1) /*width*/, board_batt_y2 -2 /*height*/, BLACK); //Clear empty space
 
-		if (esc_telemetry.battery_level * 100 < 45) color = WHITE;
-		else color = BLACK;
+		// Voltage
+
+		esc_vin_previous = esc_telemetry.v_in;
+		sprintf((char *)ascii, "%3.1fV", esc_telemetry.v_in);
+		{
+			ypos = board_batt_y2 - 6;
+			xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
+			lcdSetFontDirection(dev, DIRECTION0);
+		}
+		color = WHITE;
+		if (esc_telemetry.battery_level * 100 > 45) color = BLACK;
+
 		lcdUnsetFontFill(dev);
 		lcdDrawString(dev, fx, xpos, ypos, ascii, color);
 	}
@@ -345,7 +356,7 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height) 
 
 	endTick = xTaskGetTickCount();
 	diffTick = endTick - startTick;
-	//ESP_LOGI(__FUNCTION__, "elapsed time[ms]:%d",diffTick*portTICK_RATE_MS);
+	ESP_LOGI(__FUNCTION__, "elapsed time[ms]:%d",diffTick*portTICK_RATE_MS);
 	return diffTick;
 }
 

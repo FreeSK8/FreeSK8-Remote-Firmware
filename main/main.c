@@ -611,6 +611,9 @@ static void xbee_task(void *arg)
 			xbee_send_string((unsigned char*)"ATD70\r"); // Digital IO7 is Disabled
 			if (configuration_success) configuration_success = xbee_wait_ok(data, false);
 
+			xbee_send_string((unsigned char*)"ATWR\r"); // Write configuration
+			if (configuration_success) configuration_success = xbee_wait_ok(data, false);
+
 			xbee_send_string((unsigned char*)"ATCN\r"); // Exit Command mode
 			if (configuration_success) configuration_success = xbee_wait_ok(data, false);
 
@@ -808,6 +811,9 @@ void ST7789_Task(void *pvParameters)
 		if (accel_g_x_delta > delta_threshold || accel_g_y_delta > delta_threshold || accel_g_z_delta > delta_threshold)
 		{
 			idle_delay = 0;
+			if (is_remote_idle) {
+				resetPreviousValues();
+			}
 			is_remote_idle = false;
 		}
 		else if (++idle_delay > 30)
