@@ -29,9 +29,14 @@
 #include "esp_crc.h"
 #include "espnow.h"
 
+#define ESPNOW_MAGIC 420
+
 #define ESPNOW_MAXDELAY 512
 
 static const char *TAG = "espnow_example";
+
+static u_int8_t xbee_ch;
+static u_int16_t xbee_id;
 
 static xQueueHandle s_example_espnow_queue;
 
@@ -103,7 +108,7 @@ static void example_espnow_recv_cb(const uint8_t *mac_addr, const uint8_t *data,
 }
 
 /* Parse received ESPNOW data. */
-int example_espnow_data_parse(uint8_t *data, uint16_t data_len, uint8_t *state, uint16_t *seq, int *magic)
+int example_espnow_data_parse(uint8_t *data, uint16_t data_len, uint8_t *state, uint16_t *seq, int *magic, uint8_t *xbee_ch, uint16_t *xbee_id)
 {
     example_espnow_data_t *buf = (example_espnow_data_t *)data;
     uint16_t crc, crc_cal = 0;
@@ -116,6 +121,8 @@ int example_espnow_data_parse(uint8_t *data, uint16_t data_len, uint8_t *state, 
     *state = buf->state;
     *seq = buf->seq_num;
     *magic = buf->magic;
+    *xbee_ch = buf->xbee_ch;
+    *xbee_id = buf->xbee_id;
     crc = buf->crc;
     buf->crc = 0;
     crc_cal = esp_crc16_le(UINT16_MAX, (uint8_t const *)buf, data_len);
@@ -139,8 +146,9 @@ void example_espnow_data_prepare(example_espnow_send_param_t *send_param)
     buf->seq_num = s_example_espnow_seq[buf->type]++;
     buf->crc = 0;
     buf->magic = send_param->magic;
-    /* Fill all remaining bytes after the data with random values */
-    esp_fill_random(buf->payload, send_param->len - sizeof(example_espnow_data_t));
+    buf->xbee_ch = xbee_ch;
+    buf->xbee_id = xbee_id;
+
     buf->crc = esp_crc16_le(UINT16_MAX, (uint8_t const *)buf, send_param->len);
 }
 
@@ -150,6 +158,8 @@ static esp_err_t example_espnow_task(void *pvParameter)
     uint8_t recv_state = 0;
     uint16_t recv_seq = 0;
     int recv_magic = 0;
+    uint8_t recv_xbee_ch = 0;
+    uint16_t recv_xbee_id = 0;
     bool is_broadcast = false;
     int ret;
 
@@ -164,7 +174,7 @@ static esp_err_t example_espnow_task(void *pvParameter)
         vTaskDelete(NULL);
     }
 
-    int TODOLimitTaskIterations = 0;
+    //TODO: int TODOLimitTaskIterations = 0;
     while (xQueueReceive(s_example_espnow_queue, &evt, portMAX_DELAY) == pdTRUE) {
         switch (evt.id) {
             case EXAMPLE_ESPNOW_SEND_CB:
@@ -173,7 +183,7 @@ static esp_err_t example_espnow_task(void *pvParameter)
                 is_broadcast = IS_BROADCAST_ADDR(send_cb->mac_addr);
 
                 ESP_LOGD(TAG, "Send data to "MACSTR", status1: %d", MAC2STR(send_cb->mac_addr), send_cb->status);
-                if (++TODOLimitTaskIterations > 20) return ESP_OK;
+                //if (++TODOLimitTaskIterations > 20) return ESP_OK;
 
                 if (is_broadcast && (send_param->broadcast == false)) {
                     break;
@@ -184,7 +194,8 @@ static esp_err_t example_espnow_task(void *pvParameter)
                     if (send_param->count == 0) {
                         ESP_LOGI(TAG, "Send done");
                         example_espnow_deinit(send_param);
-                        vTaskDelete(NULL);
+                        //vTaskDelete(NULL);
+                        return ESP_OK;
                     }
                 }
 
@@ -210,18 +221,20 @@ static esp_err_t example_espnow_task(void *pvParameter)
             {
                 example_espnow_event_recv_cb_t *recv_cb = &evt.info.recv_cb;
 
-                ret = example_espnow_data_parse(recv_cb->data, recv_cb->data_len, &recv_state, &recv_seq, &recv_magic);
+                ret = example_espnow_data_parse(recv_cb->data, recv_cb->data_len, &recv_state, &recv_seq, &recv_magic, &recv_xbee_ch, &recv_xbee_id);
                 free(recv_cb->data);
                 if (ret == EXAMPLE_ESPNOW_DATA_BROADCAST) {
                     ESP_LOGI(TAG, "Receive %dth broadcast data from: "MACSTR", len: %d", recv_seq, MAC2STR(recv_cb->mac_addr), recv_cb->data_len);
 
+                    ESP_LOGI(TAG,"Broadcasted XBEE CH 0x%02x ID 0x%04x", recv_xbee_ch, recv_xbee_id);
                     /* If MAC address does not exist in peer list, add it to peer list. */
                     if (esp_now_is_peer_exist(recv_cb->mac_addr) == false) {
                         esp_now_peer_info_t *peer = malloc(sizeof(esp_now_peer_info_t));
                         if (peer == NULL) {
                             ESP_LOGE(TAG, "Malloc peer information fail");
                             example_espnow_deinit(send_param);
-                            vTaskDelete(NULL);
+                            //vTaskDelete(NULL);
+                            return ESP_OK;
                         }
                         memset(peer, 0, sizeof(esp_now_peer_info_t));
                         peer->channel = CONFIG_ESPNOW_CHANNEL;
@@ -269,6 +282,7 @@ static esp_err_t example_espnow_task(void *pvParameter)
                 else if (ret == EXAMPLE_ESPNOW_DATA_UNICAST) {
                     ESP_LOGI(TAG, "Receive %dth unicast data from: "MACSTR", len: %d", recv_seq, MAC2STR(recv_cb->mac_addr), recv_cb->data_len);
 
+                    ESP_LOGI(TAG,"Receive XBEE CH 0x%02x ID 0x%04x", recv_xbee_ch, recv_xbee_id);
                     /* If receive unicast ESPNOW data, also stop sending broadcast ESPNOW data. */
                     send_param->broadcast = false;
                 }
@@ -286,8 +300,10 @@ static esp_err_t example_espnow_task(void *pvParameter)
     return ESP_OK;
 }
 
-esp_err_t example_espnow_init(u_int8_t xbee_ch, u_int16_t xbee_id)
+esp_err_t example_espnow_init(uint8_t p_xbee_ch, uint16_t p_xbee_id)
 {
+    xbee_ch = p_xbee_ch;
+    xbee_id = p_xbee_id;
     example_espnow_send_param_t *send_param;
 
     s_example_espnow_queue = xQueueCreate(ESPNOW_QUEUE_SIZE, sizeof(example_espnow_event_t));
@@ -332,7 +348,7 @@ esp_err_t example_espnow_init(u_int8_t xbee_ch, u_int16_t xbee_id)
     send_param->unicast = false;
     send_param->broadcast = true;
     send_param->state = 0;
-    send_param->magic = esp_random();
+    send_param->magic = ESPNOW_MAGIC; // Higher number sends ESPNOW data
     send_param->count = CONFIG_ESPNOW_SEND_COUNT;
     send_param->delay = CONFIG_ESPNOW_SEND_DELAY;
     send_param->len = CONFIG_ESPNOW_SEND_LEN;
