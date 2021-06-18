@@ -442,11 +442,10 @@ TickType_t drawScreenPairing(TFT_t * dev, FontxFile *fx, int width, int height) 
 
 
 	// Pairing dialog
-	alert_visible = true;
 	//lcdDrawFillRect(dev, 22, 42, 218, 198, BLACK);
-	lcdDrawRoundRect(dev, 22, 42, 218, 198, 6, PURPLE);
-	lcdDrawRoundRect(dev, 23, 43, 217, 197, 6, PURPLE);
-	lcdDrawRoundRect(dev, 24, 44, 216, 196, 6, PURPLE);
+	lcdDrawRoundRect(dev, 22, 42, 218, 198, 6, GREEN);
+	lcdDrawRoundRect(dev, 23, 43, 217, 197, 6, GREEN);
+	lcdDrawRoundRect(dev, 24, 44, 216, 196, 6, GREEN);
 
 	fontWidth = 2;
 	fontHeight = 2;
