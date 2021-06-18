@@ -631,7 +631,7 @@ static void xbee_task(void *arg)
 			printf("Starting ESPNOW\n");
 			// Start the ESPNOW server
 			//TODO: Pass XBEE CH, ID, MY>DL for transmission
-			example_espnow_init(remote_xbee_ch, remote_xbee_id); //TODO: timeout on this to abort pairing mode?
+			example_espnow_init(remote_xbee_ch, remote_xbee_id, NULL); //TODO: timeout on this to abort pairing mode?
 			//TODO: ESPNOW init will return when complete
 			display_blank_now = true;
 			sprintf(str_pairing_3, "Pairing was");
@@ -947,7 +947,7 @@ void app_main(void)
 
 	//TODO: from espnow example, execute after nvs_flash_init
 	example_wifi_init(); // TODO: Only needed for pairing mode
-	xbee_init(); // TODO: Only needed for pairing mode
+	xbee_init(); // TODO: Only needed for pairing mode, requires wifi_init
 
 /* ESPNOW/Wifi */
 
@@ -958,7 +958,7 @@ void app_main(void)
 	xTaskCreate(i2c_task, "i2c_task", 1024 * 2, NULL, 10, NULL);
 	
 	// Xbee task
-	xTaskCreate(xbee_task, "xbee_task", 1024 * 2, NULL, 10, NULL);
+	xTaskCreate(xbee_task, "xbee_task", 1024 * 4, NULL, 10, NULL);
 
 	// Piezo task
 	xTaskCreate(piezo_test, "piezo_test", 1024 * 1, NULL, 10, NULL);

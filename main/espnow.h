@@ -82,7 +82,17 @@ typedef struct {
     uint8_t dest_mac[ESP_NOW_ETH_ALEN];   //MAC address of destination device.
 } example_espnow_send_param_t;
 
+enum {
+    PAIRING_STATE_INIT,
+    PAIRING_STATE_CONNECTED,
+    PAIRING_STATE_READY,
+    PAIRING_STATE_PAIRED,
+    PAIRING_STATE_FAILED
+};;
 
-esp_err_t example_espnow_init(u_int8_t xbee_ch, u_int16_t xbee_id);
+typedef bool (*configure_xbee_func)(uint8_t, uint16_t);
+
+esp_err_t example_espnow_init(u_int8_t xbee_ch, u_int16_t xbee_id, configure_xbee_func p_configure_xbee);
+void example_espnow_cancel();
 
 #endif

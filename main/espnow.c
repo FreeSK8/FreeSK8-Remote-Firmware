@@ -29,7 +29,8 @@
 #include "esp_crc.h"
 #include "espnow.h"
 
-#define ESPNOW_MAGIC 420
+#define ESPNOW_MAGIC 42
+#define ESPNOW_RECEIVER 0
 
 #define ESPNOW_MAXDELAY 512
 
@@ -152,7 +153,7 @@ void example_espnow_data_prepare(example_espnow_send_param_t *send_param)
     buf->crc = esp_crc16_le(UINT16_MAX, (uint8_t const *)buf, send_param->len);
 }
 
-static esp_err_t example_espnow_task(void *pvParameter)
+static esp_err_t example_espnow_task(void *pvParameter, configure_xbee_func p_configure_xbee)
 {
     example_espnow_event_t evt;
     uint8_t recv_state = 0;
@@ -162,8 +163,9 @@ static esp_err_t example_espnow_task(void *pvParameter)
     uint16_t recv_xbee_id = 0;
     bool is_broadcast = false;
     int ret;
-
-    vTaskDelay(5000 / portTICK_RATE_MS); //TODO: 5 seconds, what the hey example?
+#if ESPNOW_RECEIVER
+    bool pairing_configuration_received = false;
+#endif
     ESP_LOGI(TAG, "Start sending broadcast data");
 
     /* Start sending broadcast ESPNOW data. */
@@ -174,7 +176,7 @@ static esp_err_t example_espnow_task(void *pvParameter)
         vTaskDelete(NULL);
     }
 
-    //TODO: int TODOLimitTaskIterations = 0;
+    //TODO: int TODOLimitTaskIterations = 0; //TODO: Limit time in pairing
     while (xQueueReceive(s_example_espnow_queue, &evt, portMAX_DELAY) == pdTRUE) {
         switch (evt.id) {
             case EXAMPLE_ESPNOW_SEND_CB:
@@ -182,19 +184,30 @@ static esp_err_t example_espnow_task(void *pvParameter)
                 example_espnow_event_send_cb_t *send_cb = &evt.info.send_cb;
                 is_broadcast = IS_BROADCAST_ADDR(send_cb->mac_addr);
 
-                ESP_LOGD(TAG, "Send data to "MACSTR", status1: %d", MAC2STR(send_cb->mac_addr), send_cb->status);
                 //if (++TODOLimitTaskIterations > 20) return ESP_OK;
 
                 if (is_broadcast && (send_param->broadcast == false)) {
+                    ESP_LOGW(TAG, "Nothing to send because send_param->broadcast is false");
                     break;
                 }
+#if ESPNOW_RECEIVER
+                if (send_param->state > PAIRING_STATE_READY) {
+                    ESP_LOGW(TAG, "Nothing to send because send_param->state is > 3 (ready)");
+                    break;
+                }
+#else
+                /* Remote will wait for state to be READY */
+                if (recv_state == PAIRING_STATE_CONNECTED) {
+                    ESP_LOGI(TAG, "Nothing to send because we are waiting for ready from the receiver");
+                    break;
+                }
+#endif
 
                 if (!is_broadcast) {
                     send_param->count--;
                     if (send_param->count == 0) {
                         ESP_LOGI(TAG, "Send done");
                         example_espnow_deinit(send_param);
-                        //vTaskDelete(NULL);
                         return ESP_OK;
                     }
                 }
@@ -224,17 +237,15 @@ static esp_err_t example_espnow_task(void *pvParameter)
                 ret = example_espnow_data_parse(recv_cb->data, recv_cb->data_len, &recv_state, &recv_seq, &recv_magic, &recv_xbee_ch, &recv_xbee_id);
                 free(recv_cb->data);
                 if (ret == EXAMPLE_ESPNOW_DATA_BROADCAST) {
-                    ESP_LOGI(TAG, "Receive %dth broadcast data from: "MACSTR", len: %d", recv_seq, MAC2STR(recv_cb->mac_addr), recv_cb->data_len);
+                    ESP_LOGI(TAG, "Received %d broadcasted State: %d from: "MACSTR", len: %d", recv_seq, recv_state, MAC2STR(recv_cb->mac_addr), recv_cb->data_len);
 
-                    ESP_LOGI(TAG,"Broadcasted XBEE CH 0x%02x ID 0x%04x", recv_xbee_ch, recv_xbee_id);
                     /* If MAC address does not exist in peer list, add it to peer list. */
                     if (esp_now_is_peer_exist(recv_cb->mac_addr) == false) {
                         esp_now_peer_info_t *peer = malloc(sizeof(esp_now_peer_info_t));
                         if (peer == NULL) {
                             ESP_LOGE(TAG, "Malloc peer information fail");
                             example_espnow_deinit(send_param);
-                            //vTaskDelete(NULL);
-                            return ESP_OK;
+                            return ESP_FAIL;
                         }
                         memset(peer, 0, sizeof(esp_now_peer_info_t));
                         peer->channel = CONFIG_ESPNOW_CHANNEL;
@@ -244,45 +255,112 @@ static esp_err_t example_espnow_task(void *pvParameter)
                         memcpy(peer->peer_addr, recv_cb->mac_addr, ESP_NOW_ETH_ALEN);
                         ESP_ERROR_CHECK( esp_now_add_peer(peer) );
                         free(peer);
+                        ESP_LOGI(TAG, "Peer added from broadcasted data");
                     }
 
-                    /* Indicates that the device has received broadcast ESPNOW data. */
-                    if (send_param->state == 0) {
-                        send_param->state = 1;
+                    /* Change state to connected when we have a peer added */
+                    if (send_param->state == PAIRING_STATE_INIT) {
+                        ESP_LOGI(TAG, "Changing state to 1 (Connected)");
+                        send_param->state = PAIRING_STATE_CONNECTED;
                     }
 
-                    /* If receive broadcast ESPNOW data which indicates that the other device has received
-                     * broadcast ESPNOW data and the local magic number is bigger than that in the received
-                     * broadcast ESPNOW data, stop sending broadcast ESPNOW data and start sending unicast
-                     * ESPNOW data.
-                     */
-                    if (recv_state == 1) {
-                        /* The device which has the bigger magic number sends ESPNOW data, the other one
-                         * receives ESPNOW data.
-                         */
-                        if (send_param->unicast == false && send_param->magic >= recv_magic) {
-                    	    ESP_LOGI(TAG, "Start sending unicast data");
-                    	    ESP_LOGI(TAG, "send data to "MACSTR"", MAC2STR(recv_cb->mac_addr));
+#if ESPNOW_RECEIVER
+                    if (recv_state == PAIRING_STATE_CONNECTED) {
+                        ESP_LOGI(TAG, "Start sending unicast data");
+                        ESP_LOGI(TAG, "send data to "MACSTR"", MAC2STR(recv_cb->mac_addr));
 
-                    	    /* Start sending unicast ESPNOW data. */
-                            memcpy(send_param->dest_mac, recv_cb->mac_addr, ESP_NOW_ETH_ALEN);
-                            example_espnow_data_prepare(send_param);
-                            if (esp_now_send(send_param->dest_mac, send_param->buffer, send_param->len) != ESP_OK) {
-                                ESP_LOGE(TAG, "Send error");
-                                example_espnow_deinit(send_param);
-                                vTaskDelete(NULL);
-                            }
-                            else {
-                                send_param->broadcast = false;
-                                send_param->unicast = true;
-                            }
+                        /* Start sending unicast ESPNOW data. */
+                        memcpy(send_param->dest_mac, recv_cb->mac_addr, ESP_NOW_ETH_ALEN);
+                        example_espnow_data_prepare(send_param);
+                        if (esp_now_send(send_param->dest_mac, send_param->buffer, send_param->len) != ESP_OK) {
+                            ESP_LOGE(TAG, "Send error");
+                            example_espnow_deinit(send_param);
+                            return ESP_FAIL;
                         }
+                        send_param->broadcast = false;
+                        send_param->unicast = true;
                     }
+                    else
+                    {
+                        ESP_LOGW(TAG, "hey renee recv state %d has no handler, mystate %d", recv_state, send_param->state);
+                        /* Change state back to init because the other side isn't ready */
+                        send_param->state = PAIRING_STATE_INIT;
+                    }
+#endif
                 }
                 else if (ret == EXAMPLE_ESPNOW_DATA_UNICAST) {
                     ESP_LOGI(TAG, "Receive %dth unicast data from: "MACSTR", len: %d", recv_seq, MAC2STR(recv_cb->mac_addr), recv_cb->data_len);
+                    ESP_LOGI(TAG, "Receive unicast State %d, XBEE CH 0x%02x ID 0x%04x, My State %d", recv_state, recv_xbee_ch, recv_xbee_id, send_param->state);
+#if ESPNOW_RECEIVER
+                    if (recv_state == PAIRING_STATE_READY && !pairing_configuration_received)
+                    {
+                        ESP_LOGI(TAG, "Configuring XBEE because remote is ready");
+                        pairing_configuration_received = true;
+                        xbee_ch = recv_xbee_ch;
+                        xbee_id = recv_xbee_id;
+                        //TODO: configure xbee AND respond with PAIRED | FAILED
+                        if ((*p_configure_xbee)(recv_xbee_ch, recv_xbee_id))
+                        {
+                            ESP_LOGI(TAG, "Changing state to 3 (Paired)");
+                            send_param->state = PAIRING_STATE_PAIRED;
+                        }
+                        else {
+                            ESP_LOGI(TAG, "Changing state to 4 (Failed)");
+                            send_param->state = PAIRING_STATE_FAILED;
+                        }
 
-                    ESP_LOGI(TAG,"Receive XBEE CH 0x%02x ID 0x%04x", recv_xbee_ch, recv_xbee_id);
+                        /* Send PAIRED or FAILED response */
+                        example_espnow_data_prepare(send_param);
+                        if (esp_now_send(send_param->dest_mac, send_param->buffer, send_param->len) != ESP_OK) {
+                            ESP_LOGE(TAG, "Send error");
+                            example_espnow_deinit(send_param);
+                            return ESP_FAIL;
+                        }
+                    } else if (recv_state == PAIRING_STATE_PAIRED) {
+                        //NOTE: The remote knows we are in a successful state
+                        ESP_LOGI(TAG, "PAIRED message received, remote knows i'm done!");
+                        example_espnow_deinit(send_param);
+                        return ESP_OK;
+                    }
+#else
+
+                    if (recv_state == PAIRING_STATE_CONNECTED && send_param->state == PAIRING_STATE_CONNECTED) {
+                        ESP_LOGI(TAG, "Changing state to 2 (Ready)");
+                        send_param->state = PAIRING_STATE_READY;
+                        ESP_LOGI(TAG, "Start sending unicast data");
+                        ESP_LOGI(TAG, "send data to "MACSTR"", MAC2STR(recv_cb->mac_addr));
+
+                        /* Start sending unicast ESPNOW data. */
+                        memcpy(send_param->dest_mac, recv_cb->mac_addr, ESP_NOW_ETH_ALEN);
+                        example_espnow_data_prepare(send_param);
+                        if (esp_now_send(send_param->dest_mac, send_param->buffer, send_param->len) != ESP_OK) {
+                            ESP_LOGE(TAG, "Send error");
+                            example_espnow_deinit(send_param);
+                            return ESP_FAIL;
+                        }
+                        send_param->broadcast = false;
+                        send_param->unicast = true;
+                    }
+                    else if (recv_state == PAIRING_STATE_PAIRED) {
+                        ESP_LOGI(TAG, "Pairing SUCCESSFUL");
+                        ESP_LOGI(TAG, "Changing state to 3 (Paired)");
+                        send_param->state = PAIRING_STATE_PAIRED;
+                        example_espnow_data_prepare(send_param);
+                        if (esp_now_send(send_param->dest_mac, send_param->buffer, send_param->len) != ESP_OK) {
+                            ESP_LOGE(TAG, "Send error");
+                            example_espnow_deinit(send_param);
+                            return ESP_FAIL;
+                        }
+                        vTaskDelay(5000/portTICK_RATE_MS); //TODO: wait? for buffer to clear???
+                        example_espnow_deinit(send_param);
+                        return ESP_OK;
+                    }
+                    else if (recv_state == PAIRING_STATE_FAILED) {
+                        ESP_LOGE(TAG, "Pairing error on receiver side");
+                        example_espnow_deinit(send_param);
+                        return ESP_FAIL;
+                    }
+#endif
                     /* If receive unicast ESPNOW data, also stop sending broadcast ESPNOW data. */
                     send_param->broadcast = false;
                 }
@@ -300,8 +378,14 @@ static esp_err_t example_espnow_task(void *pvParameter)
     return ESP_OK;
 }
 
-esp_err_t example_espnow_init(uint8_t p_xbee_ch, uint16_t p_xbee_id)
+esp_err_t example_espnow_init(uint8_t p_xbee_ch, uint16_t p_xbee_id, configure_xbee_func p_configure_xbee)
 {
+
+#if ESPNOW_RECEIVER
+    //NOTE: This is already initialized on the remote to generate XBEE configuration
+    example_wifi_init();
+#endif
+
     xbee_ch = p_xbee_ch;
     xbee_id = p_xbee_id;
     example_espnow_send_param_t *send_param;
@@ -366,14 +450,24 @@ esp_err_t example_espnow_init(uint8_t p_xbee_ch, uint16_t p_xbee_id)
     //TODO: xTaskCreate(example_espnow_task, "example_espnow_task", 2048, send_param, 4, NULL);
 
     //TODO: return ESP_OK;
-    return example_espnow_task(send_param);
+    return example_espnow_task(send_param, p_configure_xbee);
 }
 
 static void example_espnow_deinit(example_espnow_send_param_t *send_param)
 {
+    esp_now_unregister_recv_cb();
     free(send_param->buffer);
     free(send_param);
     vSemaphoreDelete(s_example_espnow_queue);
+    esp_now_deinit();
+}
+
+void example_espnow_cancel()
+{
+    //TODO: How do we properly clean up without crashing/instability
+    //esp_now_unregister_recv_cb();
+    //esp_now_unregister_send_cb();
+    //vSemaphoreDelete(s_example_espnow_queue);
     esp_now_deinit();
 }
 
@@ -388,5 +482,5 @@ void example_main(void)
     ESP_ERROR_CHECK( ret );
 
     example_wifi_init();
-    example_espnow_init(0x0, 0x0);
+    example_espnow_init(0x0, 0x0, NULL);
 }
