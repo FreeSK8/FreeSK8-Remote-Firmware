@@ -14,6 +14,7 @@ set(srcs "main.c"
     "lib/ADS1015/src/ADS1015.c"
     "lib/melody/melody.c"
     "lib/melody/melody_notes.c"
+    "lib/esp32-button/src/button.c"
     )
 
 # Only ESP32 has enough memory to do jpeg decoding
@@ -22,7 +23,7 @@ if(IDF_TARGET STREQUAL "esp32")
 endif()
 
 idf_component_register(SRCS ${srcs}
-                    INCLUDE_DIRS ".;./lib/st7789;./lib/MPU6050;./lib/vesc;./lib/ADS1015/src;./lib/melody")
+                    INCLUDE_DIRS ".;./lib/st7789;./lib/MPU6050;./lib/vesc;./lib/ADS1015/src;./lib/melody;./lib/esp32-button/include")
 
 
 # Create a SPIFFS image from the contents of the 'font' directory
