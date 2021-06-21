@@ -786,7 +786,12 @@ void ST7789_Task(void *pvParameters)
 
 	// FreeSK8 Logo
 	lcdFillScreen(&dev, BLACK);
-	JPEGTest(&dev, (char*)"/spiffs/logo_badge.jpg", 206, 114, 17, 63);
+	if (remote_in_pairing_mode) {
+		JPEGTest(&dev, (char*)"/spiffs/logo_badge_pairing.jpg", 206, 179, 17, 63);
+	} else {
+		JPEGTest(&dev, (char*)"/spiffs/logo_badge.jpg", 206, 114, 17, 63);
+	}
+
 	vTaskDelay(3000/portTICK_PERIOD_MS);
 	lcdFillScreen(&dev, BLACK);
 
