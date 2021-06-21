@@ -154,6 +154,8 @@ static void piezo_test(void *arg)
 #include "freertos/queue.h"
 #include "driver/gpio.h"
 
+#include "button.h"
+
 #define GPIO_OUTPUT_IO_0    2  //LED
 #define GPIO_OUTPUT_IO_1    32 //MCU_LATCH
 #define GPIO_OUTPUT_PIN_SEL  ((1ULL<<GPIO_OUTPUT_IO_0) | (1ULL<<GPIO_OUTPUT_IO_1))
@@ -181,7 +183,7 @@ int gpio_switch_2 = 0;
 int gpio_switch_3 = 0;
 int gpio_switch_detect = 0;
 int gpio_usb_detect = 0;
-static void GPIO_Task(void* arg)
+static void gpio_input_task(void* arg)
 {
 	gpio_switch_3 = !gpio_get_level(GPIO_INPUT_IO_0);
 	gpio_switch_1 = !gpio_get_level(GPIO_INPUT_IO_1);
@@ -189,69 +191,46 @@ static void GPIO_Task(void* arg)
 	gpio_switch_detect = !gpio_get_level(GPIO_INPUT_IO_3);
 	gpio_usb_detect = !gpio_get_level(GPIO_INPUT_IO_4);
 
-    uint32_t io_num;
-	TickType_t startTick = xTaskGetTickCount();
-	TickType_t endTick, diffTick;
+    button_event_t ev;
+	QueueHandle_t button_events = button_init(GPIO_INPUT_PIN_SEL, GPIO_INPUT_PINS_UP);
 
-    for(;;) {
-        if(xQueueReceive(gpio_evt_queue, &io_num, portMAX_DELAY)) {
-            printf("GPIO[%d] intr, val: %d\n", io_num, gpio_get_level(io_num));
-			switch(io_num)
-			{
-				case GPIO_INPUT_IO_1:
-					gpio_switch_1 = !gpio_get_level(io_num);
-					printf("SW1 %d\n", gpio_switch_1);
-					if (gpio_switch_1)
-					{
-						gpio_switch_1_time = xTaskGetTickCount(); //TODO: track time switch pressed to catch double click
-						if (alert_visible) alert_clear = true;
-						else
-						{
-							display_second_screen = !display_second_screen; //Switch between display views
-							display_blank_now = true;
-						}
-					} 
-				break;
-				case GPIO_INPUT_IO_2:
-					gpio_switch_2 = !gpio_get_level(io_num);
-					printf("SW2 %d\n", gpio_switch_2);
-					if (gpio_switch_2 == 0)
-					{
-						//test_haptic_now();
-					}
-				break;
-				case GPIO_INPUT_IO_0:
-					gpio_switch_3 = !gpio_get_level(io_num);
-					printf("SW3%d\n", gpio_switch_3);
-				break;
-				case GPIO_INPUT_IO_3: //switch detect
-					printf("SWITCH DETECT %d\n", gpio_get_level(io_num));
-					// Make sure user holds power for one second before power off
-					if(gpio_get_level(io_num) == 1)
-					{
-						// Time down
-						startTick = xTaskGetTickCount();
-					}
-					else
-					{
-						endTick = xTaskGetTickCount();
-						diffTick = endTick - startTick;
-						ESP_LOGI(__FUNCTION__, "Power button elapsed time[ms]:%d",diffTick*portTICK_RATE_MS);
+	// Check if we are to enter pairing mode
+	if (!gpio_get_level(GPIO_INPUT_IO_1))
+	{
+		remote_in_pairing_mode = true;
+	}
 
-						if (diffTick*portTICK_RATE_MS > 1000)
-						{
-							/// Turn battery power off
-							gpio_set_level(GPIO_OUTPUT_IO_1, 0);
-						}
-					}
-				break;
-				case GPIO_INPUT_IO_4:
-					gpio_usb_detect = !gpio_get_level(io_num);
-					printf("USB DETECT %d\n", gpio_usb_detect);
-				break;
+	while (true) {
+		if (xQueueReceive(button_events, &ev, 1000/portTICK_PERIOD_MS)) {
+			if ((ev.pin == GPIO_INPUT_IO_1) && (ev.event == BUTTON_DOWN)) {
+				// INPUT 1
+				if (alert_visible) alert_clear = true;
+				else
+				{
+					//Switch between display views
+					display_second_screen = !display_second_screen;
+					display_blank_now = true;
+				}
 			}
-        }
-    }
+			if ((ev.pin == GPIO_INPUT_IO_1) && (ev.event == BUTTON_DOUBLE_CLICK)) {
+				// INPUT 1
+				melody_play(MELODY_STARTUP, true);
+			}
+			if ((ev.pin == GPIO_INPUT_IO_2) && (ev.event == BUTTON_DOWN)) {
+				// INPUT 2
+			}
+			if ((ev.pin == GPIO_INPUT_IO_0) && (ev.event == BUTTON_DOWN)) {
+				// INPUT 3
+			}
+			if ((ev.pin == GPIO_INPUT_IO_3) && (ev.event == BUTTON_HELD)) {
+				/// Turn battery power off
+				gpio_set_level(GPIO_OUTPUT_IO_1, 0);
+			}
+			if ((ev.pin == GPIO_INPUT_IO_4) && (ev.event == BUTTON_DOWN)) {
+				gpio_usb_detect = (ev.event == BUTTON_DOWN);
+			}
+		}
+	}
 }
 static void gpio_init_remote()
 {
@@ -276,50 +255,8 @@ static void gpio_init_remote()
 	vTaskDelay(500/portTICK_PERIOD_MS);
 	gpio_set_level(GPIO_OUTPUT_IO_0, 1);
 
-	/// INPUTS
-    io_conf.intr_type = GPIO_INTR_ANYEDGE;
-    io_conf.pin_bit_mask = GPIO_INPUT_PIN_SEL;
-    io_conf.mode = GPIO_MODE_INPUT;
-    io_conf.pull_up_en = 0;
-	io_conf.pull_down_en = 1;
-    gpio_config(&io_conf);
-
-    io_conf.intr_type = GPIO_INTR_ANYEDGE;
-    io_conf.pin_bit_mask = GPIO_INPUT_PINS_UP;
-    io_conf.mode = GPIO_MODE_INPUT;
-    io_conf.pull_up_en = 1;
-	io_conf.pull_down_en = 0;
-    gpio_config(&io_conf);
-
-    //change gpio intrrupt type
-    //gpio_set_intr_type(GPIO_INPUT_IO_0, GPIO_INTR_ANYEDGE);
-	//gpio_set_intr_type(GPIO_INPUT_IO_1, GPIO_INTR_ANYEDGE);
-	//gpio_set_intr_type(GPIO_INPUT_IO_2, GPIO_INTR_ANYEDGE);
-	//gpio_set_intr_type(GPIO_INPUT_IO_3, GPIO_INTR_ANYEDGE);
-	//gpio_set_intr_type(GPIO_INPUT_IO_4, GPIO_INTR_ANYEDGE);
-
-	// Check if we are to enter pairing mode
-	if (!gpio_get_level(GPIO_INPUT_IO_1))
-	{
-		remote_in_pairing_mode = true;
-	}
-
-    //create a queue to handle gpio event from isr
-    gpio_evt_queue = xQueueCreate(10, sizeof(uint32_t));
     //start gpio task
-    xTaskCreate(GPIO_Task, "gpio_task", 2048, NULL, 10, NULL);
-
-    //install gpio isr service
-    gpio_install_isr_service(ESP_INTR_FLAG_DEFAULT);
-    //hook isr handler for specific gpio pin
-    gpio_isr_handler_add(GPIO_INPUT_IO_0, gpio_isr_handler, (void*) GPIO_INPUT_IO_0);
-    gpio_isr_handler_add(GPIO_INPUT_IO_1, gpio_isr_handler, (void*) GPIO_INPUT_IO_1);
-    gpio_isr_handler_add(GPIO_INPUT_IO_2, gpio_isr_handler, (void*) GPIO_INPUT_IO_2);
-	gpio_isr_handler_add(GPIO_INPUT_IO_3, gpio_isr_handler, (void*) GPIO_INPUT_IO_3);
-	gpio_isr_handler_add(GPIO_INPUT_IO_4, gpio_isr_handler, (void*) GPIO_INPUT_IO_4);
-
-    //remove isr handler for gpio number.
-    ////gpio_isr_handler_remove(GPIO_INPUT_IO_0);
+    xTaskCreate(gpio_input_task, "gpio_task", 2048, NULL, 10, NULL);
 }
 /* GPIO */
 
