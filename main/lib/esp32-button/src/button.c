@@ -57,7 +57,7 @@ static bool button_up(debounce_t *d) {
 }
 
 #define LONG_PRESS_DURATION (2000)
-#define LONG_PRESS_REPEAT (50)
+#define LONG_PRESS_REPEAT (1000)
 #define DOUBLE_PRESS_TIMEOUT (250)
 
 static uint32_t millis() {
@@ -80,7 +80,7 @@ static void button_task(void *pvParameter)
             if (debounce[idx].down_time && millis() >= debounce[idx].next_long_time) {
                 debounce[idx].single_click = false;
                 debounce[idx].double_click = false;
-                ESP_LOGI(TAG, "%d LONG", debounce[idx].pin);
+                //ESP_LOGI(TAG, "%d LONG", debounce[idx].pin);
                 debounce[idx].next_long_time = debounce[idx].next_long_time + LONG_PRESS_REPEAT;
                 send_event(debounce[idx], BUTTON_HELD);
             } else if (button_down(&debounce[idx]) && debounce[idx].down_time == 0) {
@@ -150,7 +150,7 @@ QueueHandle_t button_init(unsigned long long pin_select, unsigned long long pin_
     // Scan the pin map to determine number of pins
     pin_count = 0;
     for (int pin=0; pin<=39; pin++) {
-        if ((1ULL<<pin) & pin_select) {
+        if (((1ULL<<pin) & pin_select) || ((1ULL<<pin) & pin_select_pullups)) {
             pin_count++;
         }
     }
@@ -162,11 +162,11 @@ QueueHandle_t button_init(unsigned long long pin_select, unsigned long long pin_
     // Scan the pin map to determine each pin number, populate the state
     uint32_t idx = 0;
     for (int pin=0; pin<=39; pin++) {
-        if ((1ULL<<pin) & pin_select) {
+        if (((1ULL<<pin) & pin_select) || ((1ULL<<pin) & pin_select_pullups)) {
             ESP_LOGI(TAG, "Registering button input: %d", pin);
             debounce[idx].pin = pin;
             debounce[idx].down_time = 0;
-            debounce[idx].inverted = (pin == 33 || pin == 34 || pin == 35); //TODO: only pin 27 is not inverted?
+            debounce[idx].inverted = (pin != 27); //TODO: only pin 27 is not inverted?
             if (debounce[idx].inverted) debounce[idx].history = 0xffff;
             idx++;
         }
