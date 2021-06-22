@@ -226,8 +226,8 @@ static void gpio_input_task(void* arg)
 				/// Turn battery power off
 				gpio_set_level(GPIO_OUTPUT_IO_1, 0);
 			}
-			if ((ev.pin == GPIO_INPUT_IO_4) && (ev.event == BUTTON_DOWN)) {
-				gpio_usb_detect = (ev.event == BUTTON_DOWN);
+			if (ev.pin == GPIO_INPUT_IO_4) {
+				gpio_usb_detect = (ev.event != BUTTON_UP);
 			}
 		}
 	}
