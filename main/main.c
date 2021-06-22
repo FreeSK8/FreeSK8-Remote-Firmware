@@ -576,13 +576,20 @@ static void xbee_task(void *arg)
 			}
 
 			printf("Starting ESPNOW\n");
-			// Start the ESPNOW server
-			//TODO: Pass XBEE CH, ID, MY>DL for transmission
-			example_espnow_init(remote_xbee_ch, remote_xbee_id, NULL); //TODO: timeout on this to abort pairing mode?
-			//TODO: ESPNOW init will return when complete
+			// Pass XBEE CH, ID, MY>DL for transmission to receiver
+			if (example_espnow_init(remote_xbee_ch, remote_xbee_id, NULL) == ESP_OK)
+			{
+				sprintf(str_pairing_3, "Pairing was");
+				sprintf(str_pairing_4, "Successful");
+			}
+			else
+			{
+				display_blank_now = true;
+				sprintf(str_pairing_3, "Pairing");
+				sprintf(str_pairing_4, "FAILED");
+				vTaskDelay(10000/portTICK_PERIOD_MS);
+			}
 			display_blank_now = true;
-			sprintf(str_pairing_3, "Pairing was");
-			sprintf(str_pairing_4, "Successful");
 
 			vTaskDelay(10000/portTICK_PERIOD_MS);
 

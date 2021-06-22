@@ -176,7 +176,6 @@ static esp_err_t example_espnow_task(void *pvParameter, configure_xbee_func p_co
         vTaskDelete(NULL);
     }
 
-    //TODO: int TODOLimitTaskIterations = 0; //TODO: Limit time in pairing
     while (xQueueReceive(s_example_espnow_queue, &evt, portMAX_DELAY) == pdTRUE) {
         switch (evt.id) {
             case EXAMPLE_ESPNOW_SEND_CB:
@@ -184,7 +183,13 @@ static esp_err_t example_espnow_task(void *pvParameter, configure_xbee_func p_co
                 example_espnow_event_send_cb_t *send_cb = &evt.info.send_cb;
                 is_broadcast = IS_BROADCAST_ADDR(send_cb->mac_addr);
 
-                //if (++TODOLimitTaskIterations > 20) return ESP_OK;
+                // Limit number of ESPNOW messages
+                send_param->count--;
+                if (send_param->count == 0) {
+                    ESP_LOGI(TAG, "Send attempts exhausted");
+                    example_espnow_deinit(send_param);
+                    return ESP_FAIL;
+                }
 
                 if (is_broadcast && (send_param->broadcast == false)) {
                     ESP_LOGW(TAG, "Nothing to send because send_param->broadcast is false");
@@ -202,22 +207,12 @@ static esp_err_t example_espnow_task(void *pvParameter, configure_xbee_func p_co
                     break;
                 }
 #endif
-
-                if (!is_broadcast) {
-                    send_param->count--;
-                    if (send_param->count == 0) {
-                        ESP_LOGI(TAG, "Send done");
-                        example_espnow_deinit(send_param);
-                        return ESP_OK;
-                    }
-                }
-
                 /* Delay a while before sending the next data. */
                 if (send_param->delay > 0) {
                     vTaskDelay(send_param->delay/portTICK_RATE_MS);
                 }
 
-                ESP_LOGI(TAG, "send data to "MACSTR"", MAC2STR(send_cb->mac_addr));
+                ESP_LOGI(TAG, "send data (%d) to "MACSTR"", send_param->count, MAC2STR(send_cb->mac_addr));
 
                 memcpy(send_param->dest_mac, send_cb->mac_addr, ESP_NOW_ETH_ALEN);
                 example_espnow_data_prepare(send_param);
@@ -298,7 +293,7 @@ static esp_err_t example_espnow_task(void *pvParameter, configure_xbee_func p_co
                         pairing_configuration_received = true;
                         xbee_ch = recv_xbee_ch;
                         xbee_id = recv_xbee_id;
-                        //TODO: configure xbee AND respond with PAIRED | FAILED
+                        // Configure XBEE and respond with PAIRED | FAILED
                         if ((*p_configure_xbee)(recv_xbee_ch, recv_xbee_id))
                         {
                             ESP_LOGI(TAG, "Changing state to 3 (Paired)");
@@ -375,7 +370,7 @@ static esp_err_t example_espnow_task(void *pvParameter, configure_xbee_func p_co
         }
     }
 
-    return ESP_OK;
+    return ESP_FAIL;
 }
 
 esp_err_t example_espnow_init(uint8_t p_xbee_ch, uint16_t p_xbee_id, configure_xbee_func p_configure_xbee)
@@ -447,9 +442,6 @@ esp_err_t example_espnow_init(uint8_t p_xbee_ch, uint16_t p_xbee_id, configure_x
     memcpy(send_param->dest_mac, s_example_broadcast_mac, ESP_NOW_ETH_ALEN);
     example_espnow_data_prepare(send_param);
 
-    //TODO: xTaskCreate(example_espnow_task, "example_espnow_task", 2048, send_param, 4, NULL);
-
-    //TODO: return ESP_OK;
     return example_espnow_task(send_param, p_configure_xbee);
 }
 
