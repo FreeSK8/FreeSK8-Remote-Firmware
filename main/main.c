@@ -30,6 +30,8 @@ bool is_remote_idle = true;
 bool display_second_screen = false;
 bool display_blank_now = false;
 
+bool is_throttle_locked = false;
+
 /* Piezo */
 #include "lib/melody/melody.h"
 
@@ -169,15 +171,6 @@ static void piezo_test(void *arg)
 #define GPIO_INPUT_PINS_UP  ((1ULL<<GPIO_INPUT_IO_4))
 #define ESP_INTR_FLAG_DEFAULT 0
 
-static xQueueHandle gpio_evt_queue = NULL;
-
-static void IRAM_ATTR gpio_isr_handler(void* arg)
-{
-    uint32_t gpio_num = (uint32_t) arg;
-    xQueueSendFromISR(gpio_evt_queue, &gpio_num, NULL);
-}
-
-TickType_t gpio_switch_1_time;
 int gpio_switch_1 = 0;
 int gpio_switch_2 = 0;
 int gpio_switch_3 = 0;
@@ -215,6 +208,14 @@ static void gpio_input_task(void* arg)
 			if ((ev.pin == GPIO_INPUT_IO_1) && (ev.event == BUTTON_DOUBLE_CLICK)) {
 				// INPUT 1
 				melody_play(MELODY_STARTUP, true);
+				is_throttle_locked = !is_throttle_locked; // Toggle throttle lock
+				if (is_throttle_locked)
+				{
+					display_blank_now = true; // Clear display
+					display_second_screen = false; // Request primary screen with throttle locked
+				}
+				else display_blank_now = true; // Clear the display if we turn off throttle lock
+				ESP_LOGI(__FUNCTION__, "Throttle lock is %d", is_throttle_locked);
 			}
 			if ((ev.pin == GPIO_INPUT_IO_2) && (ev.event == BUTTON_DOWN)) {
 				// INPUT 2
@@ -269,7 +270,8 @@ uint16_t adc_raw_joystick;
 uint16_t adc_raw_joystick_2;
 uint16_t adc_raw_battery_level;
 uint16_t adc_raw_rssi;
-uint8_t joystick_value_mapped = 127; // Center stick
+#define CENTER_JOYSTICK 127
+uint8_t joystick_value_mapped = CENTER_JOYSTICK;
 long map(long x, long in_min, long in_max, long out_min, long out_max);
 
 
@@ -290,7 +292,15 @@ static void i2c_task(void *arg)
 		if (!remote_in_pairing_mode) printf("SW1:%d SW2:%d SW3:%d USB:%d JOY1:%04d JOY2:%04d BATT:%04d RSSI:%04d ", gpio_switch_1, gpio_switch_2, gpio_switch_3, gpio_usb_detect, adc_raw_joystick, adc_raw_joystick_2, adc_raw_battery_level, adc_raw_rssi);
 		/* ADC */
 		adc_raw_joystick = ADS1015_readADC_SingleEnded(0);
-		joystick_value_mapped = map(adc_raw_joystick, 2, 1632, 0, 255);
+		// Update joystick value if throttle is not locked
+		if (!is_throttle_locked)
+		{
+			joystick_value_mapped = map(adc_raw_joystick, 2, 1632, 0, 255);
+		}
+		else
+		{
+			joystick_value_mapped = CENTER_JOYSTICK; //NOTE: Zero input if is_throttle_locked
+		}
 		if (!remote_in_pairing_mode) printf("Throttle = %d ", joystick_value_mapped);
 
 		adc_raw_battery_level = ADS1015_readADC_SingleEnded(1);
@@ -789,6 +799,7 @@ void ST7789_Task(void *pvParameters)
 		if (is_remote_idle)
 		{
 			lcdFillScreen(&dev, BLACK);
+			alert_visible = false;
 		}
 		else
 		// Draw the good stuff otherwise
@@ -797,12 +808,19 @@ void ST7789_Task(void *pvParameters)
 			{
 				display_blank_now = false;
 				lcdFillScreen(&dev, BLACK);
+				alert_visible = false;
 				resetPreviousValues();
 			}
 			// Draw primary or secondary display
 			if (display_second_screen && !alert_visible)
 			{
 				drawScreenDeveloper(&dev, fx24M, CONFIG_WIDTH, CONFIG_HEIGHT);
+			}
+			else if (is_throttle_locked && !alert_visible)
+			{
+				// Display throttle locked alert over drawScreenPrimary
+				drawAlert(&dev, fx24G, RED, "Throttle", "locked", "", "Double click", "to unlock");
+				drawScreenPrimary(&dev, fx24G, CONFIG_WIDTH, CONFIG_HEIGHT);
 			}
 			else
 			{

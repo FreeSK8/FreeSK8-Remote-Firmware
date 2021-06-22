@@ -486,3 +486,71 @@ TickType_t drawScreenPairing(TFT_t * dev, FontxFile *fx, int width, int height) 
 	//ESP_LOGI(__FUNCTION__, "elapsed time[ms]:%d",diffTick*portTICK_RATE_MS);
 	return diffTick;
 }
+
+TickType_t drawAlert(TFT_t * dev, FontxFile *fx, uint16_t p_color, char * title, char * line1, char * line2, char * line3, char * line4) {
+	alert_visible = true;
+
+	const int width = 240;
+
+	TickType_t startTick, endTick, diffTick;
+	startTick = xTaskGetTickCount();
+
+	// get font width & height
+	uint8_t buffer[FontxGlyphBufSize];
+	uint8_t fontWidth = 9;
+	uint8_t fontHeight = 9;
+	GetFontx(fx, 0, buffer, &fontWidth, &fontHeight);
+	//ESP_LOGI(__FUNCTION__,"fontWidth=%d fontHeight=%d",fontWidth,fontHeight);
+
+	uint16_t xpos;
+	uint16_t ypos;
+	//int	stlen;
+	uint8_t ascii[24];
+	uint16_t color;
+
+
+	// Alert dialog border
+	lcdDrawFillRect(dev, 22, 42, 218, 198, BLACK);
+	lcdDrawRoundRect(dev, 22, 42, 218, 198, 6, p_color);
+	lcdDrawRoundRect(dev, 23, 43, 217, 197, 6, p_color);
+	lcdDrawRoundRect(dev, 24, 44, 216, 196, 6, p_color);
+
+	fontWidth = 2;
+	fontHeight = 2;
+	lcdSetFontDirection(dev, DIRECTION0);
+	snprintf((char *)ascii, 15, title);
+	ypos = 55;
+	xpos = (width - (strlen((char *)ascii) * 8 * fontWidth)) / 2;
+	color = YELLOW;
+	lcdDrawString2(dev, fontHeight, fontWidth, xpos, ypos, ascii, color);
+
+	GetFontx(fx, 0, buffer, &fontWidth, &fontHeight);
+	color = WHITE;
+	snprintf((char *)ascii, 15, "%s", line1);
+	ypos = 115;
+	xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
+	lcdDrawString(dev, fx, xpos, ypos, ascii, color);
+
+	snprintf((char *)ascii, 15, "%s", line2);
+	ypos = 135;
+	xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
+	lcdDrawString(dev, fx, xpos, ypos, ascii, color);
+
+	//lcdDrawFillRect(dev, 25, 135, 215, 190, BLACK);
+
+	color = GRAY;
+	snprintf((char *)ascii, 15, "%s", line3);
+	ypos = 165;
+	xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
+	lcdDrawString(dev, fx, xpos, ypos, ascii, color);
+
+	snprintf((char *)ascii, 15, "%s", line4);
+	ypos = 185;
+	xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
+	lcdDrawString(dev, fx, xpos, ypos, ascii, color);
+
+	endTick = xTaskGetTickCount();
+	diffTick = endTick - startTick;
+	//ESP_LOGI(__FUNCTION__, "elapsed time[ms]:%d",diffTick*portTICK_RATE_MS);
+	return diffTick;
+}
