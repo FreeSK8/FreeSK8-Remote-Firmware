@@ -581,12 +581,14 @@ static void xbee_task(void *arg)
 			{
 				sprintf(str_pairing_3, "Pairing was");
 				sprintf(str_pairing_4, "Successful");
+				melody_play(MELODY_BLE_SUCCESS, true);
 			}
 			else
 			{
 				display_blank_now = true;
 				sprintf(str_pairing_3, "Pairing");
 				sprintf(str_pairing_4, "FAILED");
+				melody_play(MELODY_BLE_FAIL, true);
 				vTaskDelay(10000/portTICK_PERIOD_MS);
 			}
 			display_blank_now = true;
