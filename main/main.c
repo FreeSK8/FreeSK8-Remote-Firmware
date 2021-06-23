@@ -513,6 +513,8 @@ static void xbee_task(void *arg)
 
 		if (remote_in_pairing_mode)
 		{
+			uint16_t xbee_my_address = esp_random() % 0xFFFF;
+			uint16_t xbee_rx_address = esp_random() % 0xFFFF;
 			ESP_LOGI(__FUNCTION__,"Entering Pairing Mode");
 
 			ESP_LOGI(__FUNCTION__,"Configuring radio");
@@ -535,21 +537,23 @@ static void xbee_task(void *arg)
 
 			bool configuration_success = true;
 			unsigned char write_data[10] = {0};
-			sprintf((char*)write_data, "ATCH%02x\r", remote_xbee_ch);
+			sprintf((char*)write_data, "ATCH%02x\r", remote_xbee_ch); // Network Channel
 			xbee_send_string(write_data);
 			if (configuration_success) configuration_success = xbee_wait_ok(data, false);
 
-			sprintf((char*)write_data, "ATID%04x\r", remote_xbee_id);
+			sprintf((char*)write_data, "ATID%04x\r", remote_xbee_id); // Network ID
 			xbee_send_string(write_data);
 			if (configuration_success) configuration_success = xbee_wait_ok(data, false);
 
 			xbee_send_string((unsigned char*)"ATDH0\r"); // Destination High is 0
 			if (configuration_success) configuration_success = xbee_wait_ok(data, false);
 
-			xbee_send_string((unsigned char*)"ATDL2\r"); // Destination Low is #2
+			sprintf((char*)write_data, "ATDL%04x\r", xbee_rx_address); // Destination Low is randomized
+			xbee_send_string(write_data);
 			if (configuration_success) configuration_success = xbee_wait_ok(data, false);
 
-			xbee_send_string((unsigned char*)"ATMY1\r"); // My Address is #1
+			sprintf((char*)write_data, "ATMY%04x\r", xbee_my_address); // My Address is randomized
+			xbee_send_string(write_data);
 			if (configuration_success) configuration_success = xbee_wait_ok(data, false);
 
 			xbee_send_string((unsigned char*)"ATBD7\r"); // Baud 115200
@@ -576,8 +580,8 @@ static void xbee_task(void *arg)
 			}
 
 			printf("Starting ESPNOW\n");
-			// Pass XBEE CH, ID, MY>DL for transmission to receiver
-			if (example_espnow_init(remote_xbee_ch, remote_xbee_id, NULL) == ESP_OK)
+			// Pass XBEE CH, ID, MY, DL for transmission to receiver
+			if (example_espnow_init(remote_xbee_ch, remote_xbee_id, xbee_my_address, xbee_rx_address, NULL) == ESP_OK)
 			{
 				sprintf(str_pairing_3, "Pairing was");
 				sprintf(str_pairing_4, "Successful");

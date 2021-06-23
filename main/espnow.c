@@ -36,8 +36,10 @@
 
 static const char *TAG = "espnow_example";
 
-static u_int8_t xbee_ch;
-static u_int16_t xbee_id;
+static uint8_t xbee_ch;
+static uint16_t xbee_id;
+static uint16_t xbee_remote_address;
+static uint16_t xbee_receiver_address;
 
 static xQueueHandle s_example_espnow_queue;
 
@@ -109,7 +111,7 @@ static void example_espnow_recv_cb(const uint8_t *mac_addr, const uint8_t *data,
 }
 
 /* Parse received ESPNOW data. */
-int example_espnow_data_parse(uint8_t *data, uint16_t data_len, uint8_t *state, uint16_t *seq, int *magic, uint8_t *xbee_ch, uint16_t *xbee_id)
+int example_espnow_data_parse(uint8_t *data, uint16_t data_len, uint8_t *state, uint16_t *seq, int *magic, uint8_t *xbee_ch, uint16_t *xbee_id, uint16_t *xbee_remote_address, uint16_t *xbee_receiver_address)
 {
     example_espnow_data_t *buf = (example_espnow_data_t *)data;
     uint16_t crc, crc_cal = 0;
@@ -124,6 +126,8 @@ int example_espnow_data_parse(uint8_t *data, uint16_t data_len, uint8_t *state, 
     *magic = buf->magic;
     *xbee_ch = buf->xbee_ch;
     *xbee_id = buf->xbee_id;
+    *xbee_remote_address = buf->xbee_remote_address;
+    *xbee_receiver_address = buf->xbee_receiver_address;
     crc = buf->crc;
     buf->crc = 0;
     crc_cal = esp_crc16_le(UINT16_MAX, (uint8_t const *)buf, data_len);
@@ -149,6 +153,8 @@ void example_espnow_data_prepare(example_espnow_send_param_t *send_param)
     buf->magic = send_param->magic;
     buf->xbee_ch = xbee_ch;
     buf->xbee_id = xbee_id;
+    buf->xbee_remote_address = xbee_remote_address;
+    buf->xbee_receiver_address = xbee_receiver_address;
 
     buf->crc = esp_crc16_le(UINT16_MAX, (uint8_t const *)buf, send_param->len);
 }
@@ -161,6 +167,8 @@ static esp_err_t example_espnow_task(void *pvParameter, configure_xbee_func p_co
     int recv_magic = 0;
     uint8_t recv_xbee_ch = 0;
     uint16_t recv_xbee_id = 0;
+    uint16_t recv_xbee_remote_address = 0;
+    uint16_t recv_xbee_receiver_address = 0;
     bool is_broadcast = false;
     int ret;
 #if ESPNOW_RECEIVER
@@ -229,7 +237,7 @@ static esp_err_t example_espnow_task(void *pvParameter, configure_xbee_func p_co
             {
                 example_espnow_event_recv_cb_t *recv_cb = &evt.info.recv_cb;
 
-                ret = example_espnow_data_parse(recv_cb->data, recv_cb->data_len, &recv_state, &recv_seq, &recv_magic, &recv_xbee_ch, &recv_xbee_id);
+                ret = example_espnow_data_parse(recv_cb->data, recv_cb->data_len, &recv_state, &recv_seq, &recv_magic, &recv_xbee_ch, &recv_xbee_id, &recv_xbee_remote_address, &recv_xbee_receiver_address);
                 free(recv_cb->data);
                 if (ret == EXAMPLE_ESPNOW_DATA_BROADCAST) {
                     ESP_LOGI(TAG, "Received %d broadcasted State: %d from: "MACSTR", len: %d", recv_seq, recv_state, MAC2STR(recv_cb->mac_addr), recv_cb->data_len);
@@ -285,16 +293,15 @@ static esp_err_t example_espnow_task(void *pvParameter, configure_xbee_func p_co
                 }
                 else if (ret == EXAMPLE_ESPNOW_DATA_UNICAST) {
                     ESP_LOGI(TAG, "Receive %dth unicast data from: "MACSTR", len: %d", recv_seq, MAC2STR(recv_cb->mac_addr), recv_cb->data_len);
-                    ESP_LOGI(TAG, "Receive unicast State %d, XBEE CH 0x%02x ID 0x%04x, My State %d", recv_state, recv_xbee_ch, recv_xbee_id, send_param->state);
+                    ESP_LOGI(TAG, "Receive unicast State %d, XBEE CH 0x%02x ID 0x%04x TX 0x%04x RX 0x%04x, My State %d", recv_state, recv_xbee_ch, recv_xbee_id, recv_xbee_remote_address, recv_xbee_receiver_address, send_param->state);
 #if ESPNOW_RECEIVER
                     if (recv_state == PAIRING_STATE_READY && !pairing_configuration_received)
                     {
                         ESP_LOGI(TAG, "Configuring XBEE because remote is ready");
                         pairing_configuration_received = true;
-                        xbee_ch = recv_xbee_ch;
-                        xbee_id = recv_xbee_id;
+
                         // Configure XBEE and respond with PAIRED | FAILED
-                        if ((*p_configure_xbee)(recv_xbee_ch, recv_xbee_id))
+                        if ((*p_configure_xbee)(recv_xbee_ch, recv_xbee_id, recv_xbee_remote_address, recv_xbee_receiver_address))
                         {
                             ESP_LOGI(TAG, "Changing state to 3 (Paired)");
                             send_param->state = PAIRING_STATE_PAIRED;
@@ -373,7 +380,7 @@ static esp_err_t example_espnow_task(void *pvParameter, configure_xbee_func p_co
     return ESP_FAIL;
 }
 
-esp_err_t example_espnow_init(uint8_t p_xbee_ch, uint16_t p_xbee_id, configure_xbee_func p_configure_xbee)
+esp_err_t example_espnow_init(uint8_t p_xbee_ch, uint16_t p_xbee_id, uint16_t p_remote_address, uint16_t p_receiver_address, configure_xbee_func p_configure_xbee)
 {
 
 #if ESPNOW_RECEIVER
@@ -383,6 +390,8 @@ esp_err_t example_espnow_init(uint8_t p_xbee_ch, uint16_t p_xbee_id, configure_x
 
     xbee_ch = p_xbee_ch;
     xbee_id = p_xbee_id;
+    xbee_remote_address = p_remote_address;
+    xbee_receiver_address = p_receiver_address;
     example_espnow_send_param_t *send_param;
 
     s_example_espnow_queue = xQueueCreate(ESPNOW_QUEUE_SIZE, sizeof(example_espnow_event_t));
@@ -461,18 +470,4 @@ void example_espnow_cancel()
     //esp_now_unregister_send_cb();
     //vSemaphoreDelete(s_example_espnow_queue);
     esp_now_deinit();
-}
-
-void example_main(void)
-{
-    // Initialize NVS
-    esp_err_t ret = nvs_flash_init();
-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        ESP_ERROR_CHECK( nvs_flash_erase() );
-        ret = nvs_flash_init();
-    }
-    ESP_ERROR_CHECK( ret );
-
-    example_wifi_init();
-    example_espnow_init(0x0, 0x0, NULL);
 }

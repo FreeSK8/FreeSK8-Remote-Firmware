@@ -65,8 +65,10 @@ typedef struct {
     uint16_t seq_num;                     //Sequence number of ESPNOW data.
     uint16_t crc;                         //CRC16 value of ESPNOW data.
     uint32_t magic;                       //Magic number which is used to determine which device to send unicast ESPNOW data.
-    uint8_t xbee_ch;                   //Xbee channel
-    uint16_t xbee_id; // Xbee network id
+    uint8_t xbee_ch;                      //Xbee channel
+    uint16_t xbee_id;                     //Xbee network id
+    uint16_t xbee_remote_address;         //Xbee remote address
+    uint16_t xbee_receiver_address;       //Xbee receiver address
 } __attribute__((packed)) example_espnow_data_t;
 
 /* Parameters of sending ESPNOW data. */
@@ -88,11 +90,11 @@ enum {
     PAIRING_STATE_READY,
     PAIRING_STATE_PAIRED,
     PAIRING_STATE_FAILED
-};;
+};
 
-typedef bool (*configure_xbee_func)(uint8_t, uint16_t);
+typedef bool (*configure_xbee_func)(uint8_t, uint16_t, uint16_t, uint16_t);
 
-esp_err_t example_espnow_init(u_int8_t xbee_ch, u_int16_t xbee_id, configure_xbee_func p_configure_xbee);
+esp_err_t example_espnow_init(u_int8_t xbee_ch, u_int16_t xbee_id, uint16_t p_remote_address, uint16_t p_receiver_address, configure_xbee_func p_configure_xbee);
 void example_espnow_cancel();
 
 #endif
