@@ -108,13 +108,16 @@ esp_err_t load_user_settings(void)
 	if (required_size == 0) {
 		printf("Nothing saved yet!\n");
 		return ESP_FAIL;
+	} else if (required_size != settings_size) {
+		ESP_LOGW(__FUNCTION__, "Settings size mismatch: Saved=%d Expected=%d", required_size, settings_size);
+		return ESP_FAIL;
 	} else {
 		err = nvs_get_blob(my_handle, "user_settings", &loaded_settings, &required_size);
 		if (err != ESP_OK) {
 			return err;
 		}
 
-		if (my_user_settings.settings_version != SETTINGS_VERSION)
+		if (loaded_settings.settings_version != SETTINGS_VERSION)
 		{
 			ESP_LOGW(__FUNCTION__, "Settings version mismatch: Received=%d Expected=%d", loaded_settings.settings_version, SETTINGS_VERSION);
 			return ESP_FAIL;
