@@ -146,7 +146,7 @@ void resetPreviousValues()
 	gpio_usb_detect_previous = 0;
 	esc_vin_previous = 0;
 }
-TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height) {
+TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height, user_settings_t *user_settings) {
 	TickType_t startTick, endTick, diffTick;
 	startTick = xTaskGetTickCount();
 
@@ -316,7 +316,8 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height) 
 		xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
 		lcdDrawString(dev, fx, xpos, ypos, ascii, color);
 
-		sprintf((char *)ascii, "%0.0fC / %0.0fC", esc_telemetry_last_fault.temp_mos, esc_telemetry_last_fault.temp_motor);
+		if (user_settings->dispaly_fahrenheit) sprintf((char *)ascii, "%0.0fF / %0.0fF", CTOF(esc_telemetry_last_fault.temp_mos), CTOF(esc_telemetry_last_fault.temp_motor));
+		else sprintf((char *)ascii, "%0.0fC / %0.0fC", esc_telemetry_last_fault.temp_mos, esc_telemetry_last_fault.temp_motor);
 		ypos = 185;
 		xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
 		lcdDrawString(dev, fx, xpos, ypos, ascii, color);
@@ -327,8 +328,8 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height) 
 		if (esc_telemetry.tachometer_abs != tachometer_abs_previous)
 		{
 			tachometer_abs_previous = esc_telemetry.tachometer_abs;
-			//TODO: Imperial selection: sprintf((char *)ascii, "%02.2fkm", esc_telemetry.tachometer_abs / 1000.0);
-			sprintf((char *)ascii, "%02.2fmi", esc_telemetry.tachometer_abs / 1000.0 * KTOM);
+			if (user_settings->display_mph) sprintf((char *)ascii, "%02.2fmi", esc_telemetry.tachometer_abs / 1000.0 * KTOM);
+			else sprintf((char *)ascii, "%02.2fkm", esc_telemetry.tachometer_abs / 1000.0);
 			{
 				ypos = board_batt_y1 - 1;
 				xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
@@ -343,8 +344,8 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height) 
 		fontWidth = 9;
 		fontHeight = 8;
 		const float metersPerSecondToKph = 3.6;
-		//TODO: Imperial selection: sprintf((char *)ascii, "%02d", (int)(esc_telemetry.speed * metersPerSecondToKph));
-		sprintf((char *)ascii, "%02d", (int)(esc_telemetry.speed * metersPerSecondToKph * KTOM));
+		if (user_settings->display_mph) sprintf((char *)ascii, "%02d", (int)(esc_telemetry.speed * metersPerSecondToKph * KTOM));
+		else sprintf((char *)ascii, "%02d", (int)(esc_telemetry.speed * metersPerSecondToKph));
 		{
 			ypos = 42;
 			xpos = (width - (strlen((char *)ascii) * 8 * fontWidth)) / 2;

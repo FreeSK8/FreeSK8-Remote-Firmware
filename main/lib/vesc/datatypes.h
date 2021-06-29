@@ -742,6 +742,7 @@ typedef enum {
 } NRF_PAIR_RES;
 
 #define KTOM 0.621371
+#define CTOF(celsius)(((celsius) * 1.8) + 32)
 
 const char* mc_interface_fault_to_string(int fault);
 

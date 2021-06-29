@@ -21,12 +21,12 @@ typedef enum {
 
 typedef struct {
 	uint8_t settings_version;
-	uint8_t remote_model; //1=Albert,2=Bruce,3=Clint
-	bool disable_buzzer;
 	bool disable_piezo;
+	bool disable_buzzer;
 	bool display_mph;
 	bool dispaly_fahrenheit;
 	bool throttle_reverse;
+	uint8_t remote_model; //1=Albert,2=Bruce,3=Clint
 } user_settings_t;
 
 esp_err_t save_user_settings(user_settings_t * my_user_settings);
