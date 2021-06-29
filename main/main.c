@@ -798,8 +798,8 @@ void ST7789_Task(void *pvParameters)
 		if (remote_in_setup_mode)
 		{
 			// Move settings selection up and down
-			if (joystick_value_mapped < 55 && user_settings_index < 5) ++user_settings_index;
-			if (joystick_value_mapped > 200 && user_settings_index > 0) --user_settings_index;
+			if (joystick_value_mapped < 55 && user_settings_index < SETTING_MODEL) ++user_settings_index;
+			if (joystick_value_mapped > 200 && user_settings_index > SETTING_PIEZO) --user_settings_index;
 
 			lcdBacklightOn(&dev);
 			if (display_blank_now)
