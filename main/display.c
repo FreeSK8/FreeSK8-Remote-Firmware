@@ -554,3 +554,128 @@ TickType_t drawAlert(TFT_t * dev, FontxFile *fx, uint16_t p_color, char * title,
 	//ESP_LOGI(__FUNCTION__, "elapsed time[ms]:%d",diffTick*portTICK_RATE_MS);
 	return diffTick;
 }
+
+TickType_t drawSetupMenu(TFT_t * dev, FontxFile *fx, user_settings_t *user_settings, uint8_t current_index) {
+	static const int width = 240;
+	static bool first_draw = true;
+	static uint8_t previous_index = 255;
+	static user_settings_t previous_settings;
+
+	TickType_t startTick, endTick, diffTick;
+	startTick = xTaskGetTickCount();
+
+	uint8_t buffer[FontxGlyphBufSize];
+	uint8_t fontWidth = 2;
+	uint8_t fontHeight = 2;
+	uint16_t xpos;
+	uint16_t ypos;
+	uint8_t ascii[20];
+	uint16_t color;
+
+	if (first_draw)
+	{
+		lcdSetFontFill(dev, BLACK);
+		lcdSetFontDirection(dev, DIRECTION0);
+		sprintf((char *)ascii, "OSRR Setup");
+		ypos = 20;
+		xpos = (width - (strlen((char *)ascii) * 8 * fontWidth)) / 2;
+		color = YELLOW;
+		lcdDrawString2(dev, fontHeight, fontWidth, xpos, ypos, ascii, color);
+	}
+
+	if (previous_index != current_index || memcmp(&previous_settings, user_settings, sizeof(user_settings_t)) != 0 )
+	{
+		// Get font size
+		GetFontx(fx, 0, buffer, &fontWidth, &fontHeight);
+
+		if (current_index == 0 || previous_index == 0 || first_draw)
+		{
+			if (current_index == 0) color = WHITE;
+			else color = GRAY;
+			if (user_settings->disable_piezo) sprintf((char *)ascii, "Piezo: OFF");
+			else sprintf((char *)ascii, " Piezo: ON ");
+			ypos = 100;
+			xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
+			lcdDrawString(dev, fx, xpos, ypos, ascii, color);
+		}
+
+		if (current_index == 1 || previous_index == 1 || first_draw)
+		{
+			if (current_index == 1) color = WHITE;
+			else color = GRAY;
+			if (user_settings->disable_buzzer) sprintf((char *)ascii, "Buzzer: OFF");
+			else sprintf((char *)ascii, " Buzzer: ON ");
+			ypos = 125;
+			xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
+			lcdDrawString(dev, fx, xpos, ypos, ascii, color);
+		}
+
+		if (current_index == 2 || previous_index == 2 || first_draw)
+		{
+			if (current_index == 2) color = WHITE;
+			else color = GRAY;
+			if (user_settings->display_mph) sprintf((char *)ascii, " Speed: MPH ");
+			else sprintf((char *)ascii, " Speed: KPH ");
+			ypos = 150;
+			xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
+			lcdDrawString(dev, fx, xpos, ypos, ascii, color);
+		}
+
+		if (current_index == 3 || previous_index == 3 || first_draw)
+		{
+			if (current_index == 3) color = WHITE;
+			else color = GRAY;
+			if (user_settings->dispaly_fahrenheit) sprintf((char *)ascii, "Temp: Fahrenheit");
+			else sprintf((char *)ascii, "  Temp: Celsius  ");
+			ypos = 175;
+			xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
+			lcdDrawString(dev, fx, xpos, ypos, ascii, color);
+		}
+
+		if (current_index == 4 || previous_index == 4 || first_draw)
+		{
+			if (current_index == 4) color = WHITE;
+			else color = GRAY;
+			if (user_settings->throttle_reverse) sprintf((char *)ascii, " Throttle: Reverse ");
+			else sprintf((char *)ascii, " Throttle: Forward ");
+			ypos = 200;
+			xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
+			lcdDrawString(dev, fx, xpos, ypos, ascii, color);
+		}
+
+		if (current_index == 5 || previous_index == 5 || first_draw)
+		{
+			if (current_index == 5) color = WHITE;
+			else color = GRAY;
+			switch (user_settings->remote_model) {
+				case MODEL_UNDEFINED:
+					sprintf((char *)ascii, "Model: NotSet");
+					break;
+				case MODEL_ALBERT:
+					sprintf((char *)ascii, "Model: Albert");
+					break;
+				case MODEL_BRUCE:
+					sprintf((char *)ascii, " Model: Bruce ");
+					break;
+				case MODEL_CLINT:
+					sprintf((char *)ascii, " Model: Clint ");
+					break;
+			}
+			ypos = 225;
+			xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
+			lcdDrawString(dev, fx, xpos, ypos, ascii, color);
+		}
+
+		// Update previous values for next iteration
+		previous_index = current_index;
+		previous_settings = (*user_settings);
+	}
+
+	// First draw only happens once
+	first_draw = false;
+
+	endTick = xTaskGetTickCount();
+	diffTick = endTick - startTick;
+	//ESP_LOGI(__FUNCTION__, "elapsed time[ms]:%d",diffTick*portTICK_RATE_MS);
+	return diffTick;
+}

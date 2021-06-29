@@ -33,106 +33,10 @@ bool display_blank_now = false;
 bool is_throttle_locked = false;
 
 /* User Settings */
-#include "nvs_flash.h"
-
+#include "user-settings.h"
+uint8_t user_settings_index = 0;
 bool remote_in_setup_mode = false;
-typedef struct {
-	uint8_t settings_version;
-	uint8_t remote_model; //1=Albert,2=Bruce,3=Clint
-	bool disable_buzzer;
-	bool disable_piezo;
-	bool display_mph;
-	bool dispaly_fahrenheit;
-	bool throttle_reverse;
-} user_settings_t;
-
-#define SETTINGS_VERSION 1
-#define STORAGE_NAMESPACE "storage"
-
-typedef enum {
-	MODEL_UNDEFINED = 0,
-	MODEL_ALBERT,
-	MODEL_BRUCE,
-	MODEL_CLINT,
-} REMOTE_MODELS;
-
 user_settings_t my_user_settings;
-
-size_t settings_size = sizeof(user_settings_t);
-
-esp_err_t save_user_settings(void)
-{
-	nvs_handle my_handle;
-	esp_err_t err;
-
-	// Open
-	err = nvs_open(STORAGE_NAMESPACE, NVS_READWRITE, &my_handle);
-	if (err != ESP_OK) return err;
-
-	// Write value
-	err = nvs_set_blob(my_handle, "user_settings", &my_user_settings, settings_size);
-
-	if (err != ESP_OK) return err;
-
-	// Commit
-	err = nvs_commit(my_handle);
-	if (err != ESP_OK) return err;
-
-	// Close
-	nvs_close(my_handle);
-
-	ESP_LOGI(__FUNCTION__, "User Settings Saved Successfully");
-
-	return ESP_OK;
-}
-
-esp_err_t load_user_settings(void)
-{
-	user_settings_t loaded_settings;
-	nvs_handle my_handle;
-	esp_err_t err;
-
-	// Open
-	err = nvs_open(STORAGE_NAMESPACE, NVS_READWRITE, &my_handle);
-	if (err != ESP_OK) {
-		ESP_LOGE(__FUNCTION__, "nvs_open failed");
-		return err;
-	}
-
-	// Read blob
-	size_t required_size = 0;  // value will default to 0, if not set yet in NVS
-	// obtain required memory space to store blob being read from NVS
-	err = nvs_get_blob(my_handle, "user_settings", NULL, &required_size);
-	if (err != ESP_OK && err != ESP_ERR_NVS_NOT_FOUND) return err;
-
-	if (required_size == 0) {
-		printf("Nothing saved yet!\n");
-		return ESP_FAIL;
-	} else if (required_size != settings_size) {
-		ESP_LOGW(__FUNCTION__, "Settings size mismatch: Saved=%d Expected=%d", required_size, settings_size);
-		return ESP_FAIL;
-	} else {
-		err = nvs_get_blob(my_handle, "user_settings", &loaded_settings, &required_size);
-		if (err != ESP_OK) {
-			return err;
-		}
-
-		if (loaded_settings.settings_version != SETTINGS_VERSION)
-		{
-			ESP_LOGW(__FUNCTION__, "Settings version mismatch: Received=%d Expected=%d", loaded_settings.settings_version, SETTINGS_VERSION);
-			return ESP_FAIL;
-		}
-	}
-
-	// Close
-	nvs_close(my_handle);
-
-	my_user_settings = loaded_settings;
-
-	ESP_LOGI(__FUNCTION__, "User Settings Loaded Successfully");
-
-	return ESP_OK;
-}
 /* User Settings */
 
 /* Piezo */
@@ -300,6 +204,34 @@ static void gpio_input_task(void* arg)
 		if (xQueueReceive(button_events, &ev, 1000/portTICK_PERIOD_MS)) {
 			if ((ev.pin == GPIO_INPUT_IO_1) && (ev.event == BUTTON_DOWN)) {
 				// INPUT 1
+				if (remote_in_setup_mode)
+				{
+					switch(user_settings_index) 
+					{
+						case SETTING_PIEZO:
+							my_user_settings.disable_piezo = !my_user_settings.disable_piezo;
+						break;
+						case SETTING_BUZZER:
+							my_user_settings.disable_buzzer = !my_user_settings.disable_buzzer;
+						break;
+						case SETTING_SPEED:
+							my_user_settings.display_mph = !my_user_settings.display_mph;
+						break;
+						case SETTING_TEMP:
+							my_user_settings.dispaly_fahrenheit = !my_user_settings.dispaly_fahrenheit;
+						break;
+						case SETTING_THROTTLE:
+							my_user_settings.throttle_reverse = !my_user_settings.throttle_reverse;
+						break;
+						case SETTING_MODEL:
+							if (++my_user_settings.remote_model > MODEL_CLINT) my_user_settings.remote_model = MODEL_ALBERT;
+						break;
+					}
+					save_user_settings(&my_user_settings);
+					continue;
+				}
+
+				// Clear alert or change display
 				if (alert_visible) alert_clear = true;
 				else
 				{
@@ -403,6 +335,7 @@ static void i2c_task(void *arg)
 				if (joystick_value_mapped < 3) {
 					ESP_LOGI(__FUNCTION__, "Remote entering setup mode");
 					remote_in_setup_mode = true;
+					display_blank_now = true;
 				}
 			}
 		}
@@ -606,6 +539,13 @@ static void xbee_task(void *arg)
     while (1) {
         // Read data from the UART
         int len = uart_read_bytes(XBEE_UART_PORT_NUM, data, XBEE_BUF_SIZE, 20 / portTICK_RATE_MS);
+
+		if (remote_in_setup_mode)
+		{
+			// Do not communicate with the receiver while in setup mode
+			vTaskDelay(100/portTICK_PERIOD_MS);
+			continue;
+		}
 
 		if (remote_in_pairing_mode)
 		{
@@ -854,6 +794,23 @@ void ST7789_Task(void *pvParameters)
 	bool is_display_visible = true;
 	uint8_t idle_delay = 0;
 	while(1) {
+		// Check for setup mode
+		if (remote_in_setup_mode)
+		{
+			// Move settings selection up and down
+			if (joystick_value_mapped < 55 && user_settings_index < 5) ++user_settings_index;
+			if (joystick_value_mapped > 200 && user_settings_index > 0) --user_settings_index;
+
+			lcdBacklightOn(&dev);
+			if (display_blank_now)
+			{
+				display_blank_now = false;
+				lcdFillScreen(&dev, BLACK);
+			}
+			drawSetupMenu(&dev, fx24G, &my_user_settings, user_settings_index);
+			vTaskDelay(10/portTICK_PERIOD_MS);
+			continue;
+		}
 		// Check for pairing mode
 		if (remote_in_pairing_mode)
 		{
@@ -1021,14 +978,14 @@ void app_main(void)
 /* ESPNOW/Wifi */
 
 	// Grab the user settings on boot
-	ret = load_user_settings();
+	ret = load_user_settings(&my_user_settings);
 	ESP_LOGI(__FUNCTION__, "Load user settings returned: %s", esp_err_to_name(ret));
 	while (ret != ESP_OK)
 	{
 		my_user_settings.settings_version = SETTINGS_VERSION;
 		my_user_settings.remote_model = MODEL_BRUCE;
-		save_user_settings();
-		ret = load_user_settings();
+		save_user_settings(&my_user_settings);
+		ret = load_user_settings(&my_user_settings);
 	}
 	ESP_LOGI(__FUNCTION__, "Settings version=%d model=%d buzzer=%d piezo=%d fahrenheit=%d mph=%d", my_user_settings.settings_version, my_user_settings.remote_model, !my_user_settings.disable_buzzer, !my_user_settings.disable_piezo, my_user_settings.dispaly_fahrenheit, my_user_settings.display_mph);
 	// Display task
