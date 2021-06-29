@@ -136,17 +136,8 @@ static void piezo_test(void *arg)
 		{
 			was_remote_idle = false;
 		}
-        if (accel_g_x > 1.75) {
-			//melody_play(MELODY_LOG_START, false);
-		}
-		if (accel_g_y > 1.75) {
-			//melody_play(MELODY_STARTUP, false);
-		}
-		if (accel_g_z > 1.75) {
-			//melody_play(MELODY_BLE_SUCCESS, false);
-		}
-		melody_step();
-		
+
+		if (!my_user_settings.disable_piezo) melody_step();
 		
 		vTaskDelay(10/portTICK_PERIOD_MS);
     }
@@ -328,14 +319,24 @@ static void i2c_task(void *arg)
 		// Update joystick value if throttle is not locked
 		if (!is_throttle_locked)
 		{
-			joystick_value_mapped = map(adc_raw_joystick, 2, 1632, 0, 255);
+			// Map throttle, checking for reversed user setting
+			if (my_user_settings.throttle_reverse) joystick_value_mapped = 255 - map(adc_raw_joystick, 2, 1632, 0, 255);
+			else joystick_value_mapped = map(adc_raw_joystick, 2, 1632, 0, 255);
+
+			// On first read only
 			if (adc_is_first_read)
 			{
 				adc_is_first_read = false;
-				if (joystick_value_mapped < 3) {
+				// Check for full stick input to enter setup mode
+				if (joystick_value_mapped < 3 || joystick_value_mapped > 251) {
 					ESP_LOGI(__FUNCTION__, "Remote entering setup mode");
 					remote_in_setup_mode = true;
 					display_blank_now = true;
+				}
+				// Check for center stick
+				else if (joystick_value_mapped < CENTER_JOYSTICK - 5 || joystick_value_mapped > CENTER_JOYSTICK + 5) {
+					ESP_LOGW(__FUNCTION__, "Joystick not center on startup. Locking throttle");
+					is_throttle_locked = true;
 				}
 			}
 		}
@@ -358,9 +359,9 @@ static void i2c_task(void *arg)
 		accel_g_x_delta = accel_g_x - accel_gx;
 		accel_g_y_delta = accel_g_y - accel_gy;
 		accel_g_z_delta = accel_g_z - accel_gz;
-		accel_g_x = accel_gx;
-		accel_g_y = accel_gy;
-		accel_g_z = accel_gz;
+		accel_g_x = (0.8 * accel_gx) + (0.2 * accel_g_x);
+		accel_g_y = (0.8 * accel_gy) + (0.2 * accel_g_y);
+		accel_g_z = (0.8 * accel_gz) + (0.2 * accel_g_z);
 
 		//ESP_LOGI(__FUNCTION__, "ADC joy1:%d joy2:%d batt:%d rssi:%d IMU x:%f y:%f z:%f", adc_raw_joystick, adc_raw_joystick_2, adc_raw_battery_level, adc_raw_rssi, accel_g_x, accel_g_y, accel_g_z);
 	}
@@ -840,15 +841,23 @@ void ST7789_Task(void *pvParameters)
 			is_remote_idle = true;
 		}
 		// Check if remote is in a visible orientation
-		const float accel_g_x_visible = 0.5; //TODO: this is only for right handed bruce
-		const float accel_g_z_visible = 0.2; //TODO: this is only for right handed bruce
-		if (accel_g_x > accel_g_x_visible || accel_g_z > accel_g_z_visible)
+		switch (my_user_settings.remote_model)
 		{
-			is_display_visible = false;
-		}
-		else
-		{
-			is_display_visible = true;
+			//TODO: left vs right handed values: my_user_settings.throttle_reverse ?
+			case MODEL_ALBERT:
+				//TODO: estimated
+				if (accel_g_x > 0.1 || accel_g_z > 0.4) is_display_visible = false;
+				else is_display_visible = true;
+			break;
+			case MODEL_BRUCE:
+				if (accel_g_x > 0.5 || accel_g_z > 0.3) is_display_visible = false;
+				else is_display_visible = true;
+			break;
+			case MODEL_CLINT:
+				//TODO: estimated
+				if (accel_g_x > 0.2 || accel_g_y > 0.5) is_display_visible = false;
+				else is_display_visible = true;
+			break;
 		}
 
 		// Switch the backlight to save power
@@ -886,11 +895,11 @@ void ST7789_Task(void *pvParameters)
 			{
 				// Display throttle locked alert over drawScreenPrimary
 				drawAlert(&dev, fx24G, RED, "Throttle", "locked", "", "Double click", "to unlock");
-				drawScreenPrimary(&dev, fx24G, CONFIG_WIDTH, CONFIG_HEIGHT);
+				drawScreenPrimary(&dev, fx24G, CONFIG_WIDTH, CONFIG_HEIGHT, &my_user_settings);
 			}
 			else
 			{
-				drawScreenPrimary(&dev, fx24G, CONFIG_WIDTH, CONFIG_HEIGHT);
+				drawScreenPrimary(&dev, fx24G, CONFIG_WIDTH, CONFIG_HEIGHT, &my_user_settings);
 			}
 		}
 

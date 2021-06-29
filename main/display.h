@@ -46,7 +46,7 @@ volatile bool alert_clear; // Has alert been cleared by user input
 
 TickType_t drawScreenDeveloper(TFT_t * dev, FontxFile *fx, int width, int height);
 TickType_t drawScreenPairing(TFT_t * dev, FontxFile *fx, int width, int height);
-TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height);
+TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height, user_settings_t *user_settings);
 TickType_t drawAlert(TFT_t * dev, FontxFile *fx, uint16_t p_color, char * title, char * line1, char * line2, char * line3, char * line4);
 TickType_t drawSetupMenu(TFT_t * dev, FontxFile *fx, user_settings_t *user_settings, uint8_t current_index);
 TickType_t JPEGTest(TFT_t * dev, char * file, int width, int height, int offset_x, int offset_y);
