@@ -32,6 +32,106 @@ bool display_blank_now = false;
 
 bool is_throttle_locked = false;
 
+/* User Settings */
+#include "nvs_flash.h"
+
+bool remote_in_setup_mode = false;
+typedef struct {
+	uint8_t settings_version;
+	uint8_t remote_model; //1=Albert,2=Bruce,3=Clint
+	bool disable_buzzer;
+	bool disable_piezo;
+	bool display_mph;
+	bool dispaly_fahrenheit;
+	bool throttle_reverse;
+} user_settings_t;
+
+#define SETTINGS_VERSION 1
+#define STORAGE_NAMESPACE "storage"
+
+typedef enum {
+	MODEL_UNDEFINED = 0,
+	MODEL_ALBERT,
+	MODEL_BRUCE,
+	MODEL_CLINT,
+} REMOTE_MODELS;
+
+user_settings_t my_user_settings;
+
+size_t settings_size = sizeof(user_settings_t);
+
+esp_err_t save_user_settings(void)
+{
+	nvs_handle my_handle;
+	esp_err_t err;
+
+	// Open
+	err = nvs_open(STORAGE_NAMESPACE, NVS_READWRITE, &my_handle);
+	if (err != ESP_OK) return err;
+
+	// Write value
+	err = nvs_set_blob(my_handle, "user_settings", &my_user_settings, settings_size);
+
+	if (err != ESP_OK) return err;
+
+	// Commit
+	err = nvs_commit(my_handle);
+	if (err != ESP_OK) return err;
+
+	// Close
+	nvs_close(my_handle);
+
+	ESP_LOGI(__FUNCTION__, "User Settings Saved Successfully");
+
+	return ESP_OK;
+}
+
+esp_err_t load_user_settings(void)
+{
+	user_settings_t loaded_settings;
+	nvs_handle my_handle;
+	esp_err_t err;
+
+	// Open
+	err = nvs_open(STORAGE_NAMESPACE, NVS_READWRITE, &my_handle);
+	if (err != ESP_OK) {
+		ESP_LOGE(__FUNCTION__, "nvs_open failed");
+		return err;
+	}
+
+	// Read blob
+	size_t required_size = 0;  // value will default to 0, if not set yet in NVS
+	// obtain required memory space to store blob being read from NVS
+	err = nvs_get_blob(my_handle, "user_settings", NULL, &required_size);
+	if (err != ESP_OK && err != ESP_ERR_NVS_NOT_FOUND) return err;
+
+	if (required_size == 0) {
+		printf("Nothing saved yet!\n");
+		return ESP_FAIL;
+	} else {
+		err = nvs_get_blob(my_handle, "user_settings", &loaded_settings, &required_size);
+		if (err != ESP_OK) {
+			return err;
+		}
+
+		if (my_user_settings.settings_version != SETTINGS_VERSION)
+		{
+			ESP_LOGW(__FUNCTION__, "Settings version mismatch: Received=%d Expected=%d", loaded_settings.settings_version, SETTINGS_VERSION);
+			return ESP_FAIL;
+		}
+	}
+
+	// Close
+	nvs_close(my_handle);
+
+	my_user_settings = loaded_settings;
+
+	ESP_LOGI(__FUNCTION__, "User Settings Loaded Successfully");
+
+	return ESP_OK;
+}
+/* User Settings */
+
 /* Piezo */
 #include "lib/melody/melody.h"
 
@@ -178,14 +278,14 @@ int gpio_switch_detect = 0;
 int gpio_usb_detect = 0;
 static void gpio_input_task(void* arg)
 {
+    button_event_t ev;
+	QueueHandle_t button_events = button_init(GPIO_INPUT_PIN_SEL, GPIO_INPUT_PINS_UP);
+
 	gpio_switch_3 = !gpio_get_level(GPIO_INPUT_IO_0);
 	gpio_switch_1 = !gpio_get_level(GPIO_INPUT_IO_1);
 	gpio_switch_2 = !gpio_get_level(GPIO_INPUT_IO_2);
 	gpio_switch_detect = !gpio_get_level(GPIO_INPUT_IO_3);
 	gpio_usb_detect = !gpio_get_level(GPIO_INPUT_IO_4);
-
-    button_event_t ev;
-	QueueHandle_t button_events = button_init(GPIO_INPUT_PIN_SEL, GPIO_INPUT_PINS_UP);
 
 	// Check if we are to enter pairing mode
 	if (!gpio_get_level(GPIO_INPUT_IO_1))
@@ -274,7 +374,7 @@ uint16_t adc_raw_rssi;
 uint8_t joystick_value_mapped = CENTER_JOYSTICK;
 long map(long x, long in_min, long in_max, long out_min, long out_max);
 
-
+static bool adc_is_first_read = true;
 
 static void i2c_task(void *arg)
 {
@@ -288,29 +388,32 @@ static void i2c_task(void *arg)
 	ADS1015_init();
 	while(1)
 	{
-		/* Program State */
-		if (!remote_in_pairing_mode) printf("SW1:%d SW2:%d SW3:%d USB:%d JOY1:%04d JOY2:%04d BATT:%04d RSSI:%04d ", gpio_switch_1, gpio_switch_2, gpio_switch_3, gpio_usb_detect, adc_raw_joystick, adc_raw_joystick_2, adc_raw_battery_level, adc_raw_rssi);
 		/* ADC */
 		adc_raw_joystick = ADS1015_readADC_SingleEnded(0);
 		// Update joystick value if throttle is not locked
 		if (!is_throttle_locked)
 		{
 			joystick_value_mapped = map(adc_raw_joystick, 2, 1632, 0, 255);
+			if (adc_is_first_read)
+			{
+				adc_is_first_read = false;
+				if (joystick_value_mapped < 3) {
+					ESP_LOGI(__FUNCTION__, "Remote entering setup mode");
+					remote_in_setup_mode = true;
+				}
+			}
 		}
 		else
 		{
 			joystick_value_mapped = CENTER_JOYSTICK; //NOTE: Zero input if is_throttle_locked
 		}
-		if (!remote_in_pairing_mode) printf("Throttle = %d ", joystick_value_mapped);
 
 		adc_raw_battery_level = ADS1015_readADC_SingleEnded(1);
 		adc_raw_joystick_2 = ADS1015_readADC_SingleEnded(2);
 		adc_raw_rssi = ADS1015_readADC_SingleEnded(3);
 
 		/* IMU */
-
 		mpu6050_get_acceleration(&accel);
-		//printf("accel raw x%d y%d z%d\n", accel.accel_x, accel.accel_y, accel.accel_y);
 
 		float accel_gx = (float) accel.accel_x * accel_res - accel_bias[0];
 		float accel_gy = (float) accel.accel_y * accel_res - accel_bias[1];
@@ -323,9 +426,7 @@ static void i2c_task(void *arg)
 		accel_g_y = accel_gy;
 		accel_g_z = accel_gz;
 
-		if (!remote_in_pairing_mode) printf("accel G x%02f y%02f z%02f\n", accel_g_x, accel_g_y, accel_g_z);
-
-
+		//ESP_LOGI(__FUNCTION__, "ADC joy1:%d joy2:%d batt:%d rssi:%d IMU x:%f y:%f z:%f", adc_raw_joystick, adc_raw_joystick_2, adc_raw_battery_level, adc_raw_rssi, accel_g_x, accel_g_y, accel_g_z);
 	}
 }
 /* I2C Tasks */
@@ -374,15 +475,7 @@ void process_packet_vesc(unsigned char *data, unsigned int len) {
 			esc_telemetry_last_fault = esc_telemetry;
 			if (!alert_visible) alert_show = true;
 		}
-		printf("temp esc %f\n", esc_telemetry.temp_mos);
-		printf("temp motor %f\n", esc_telemetry.temp_motor);
-		printf("current motor %f\n", esc_telemetry.current_motor);
-		printf("current in %f\n", esc_telemetry.current_in);
-		printf("speed %f\n", esc_telemetry.speed);
-		printf("batt lvl %f\n", esc_telemetry.battery_level);
-		printf("voltage  %f\n", esc_telemetry.v_in);
-		printf("fault %d\n", esc_telemetry.fault_code);
-		printf("num vescs %d\n", esc_telemetry.num_vescs);
+		//ESP_LOGI(__FUNCTION__, "Temp ESC %f Motor %f, Current In %f Out %f, Speed %f, Voltage %f Fault %d ESCs %d", esc_telemetry.temp_mos, esc_telemetry.temp_motor, esc_telemetry.current_in, esc_telemetry.current_motor, esc_telemetry.speed, esc_telemetry.v_in, esc_telemetry.fault_code, esc_telemetry.num_vescs);
 	}
 }
 /* VESC */
@@ -606,7 +699,7 @@ static void xbee_task(void *arg)
 		else
 		{
 			if (len) {
-				printf("UART Received %d bytes\n", len);
+				//printf("UART Received %d bytes\n", len);
 				for (int i = 0;i < len;i++) {
 					packet_process_byte(data[i], PACKET_VESC);
 				}
@@ -924,6 +1017,17 @@ void app_main(void)
 
 /* ESPNOW/Wifi */
 
+	// Grab the user settings on boot
+	ret = load_user_settings();
+	ESP_LOGI(__FUNCTION__, "Load user settings returned: %s", esp_err_to_name(ret));
+	while (ret != ESP_OK)
+	{
+		my_user_settings.settings_version = SETTINGS_VERSION;
+		my_user_settings.remote_model = MODEL_BRUCE;
+		save_user_settings();
+		ret = load_user_settings();
+	}
+	ESP_LOGI(__FUNCTION__, "Settings version=%d model=%d buzzer=%d piezo=%d fahrenheit=%d mph=%d", my_user_settings.settings_version, my_user_settings.remote_model, !my_user_settings.disable_buzzer, !my_user_settings.disable_piezo, my_user_settings.dispaly_fahrenheit, my_user_settings.display_mph);
 	// Display task
 	xTaskCreate(ST7789_Task, "display_task", 1024*4, NULL, 2, NULL);
 
