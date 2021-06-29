@@ -588,9 +588,9 @@ TickType_t drawSetupMenu(TFT_t * dev, FontxFile *fx, user_settings_t *user_setti
 		// Get font size
 		GetFontx(fx, 0, buffer, &fontWidth, &fontHeight);
 
-		if (current_index == 0 || previous_index == 0 || first_draw)
+		if (current_index == SETTING_PIEZO || previous_index == SETTING_PIEZO || first_draw)
 		{
-			if (current_index == 0) color = WHITE;
+			if (current_index == SETTING_PIEZO) color = WHITE;
 			else color = GRAY;
 			if (user_settings->disable_piezo) sprintf((char *)ascii, "Piezo: OFF");
 			else sprintf((char *)ascii, " Piezo: ON ");
@@ -599,9 +599,9 @@ TickType_t drawSetupMenu(TFT_t * dev, FontxFile *fx, user_settings_t *user_setti
 			lcdDrawString(dev, fx, xpos, ypos, ascii, color);
 		}
 
-		if (current_index == 1 || previous_index == 1 || first_draw)
+		if (current_index == SETTING_BUZZER || previous_index == SETTING_BUZZER || first_draw)
 		{
-			if (current_index == 1) color = WHITE;
+			if (current_index == SETTING_BUZZER) color = WHITE;
 			else color = GRAY;
 			if (user_settings->disable_buzzer) sprintf((char *)ascii, "Buzzer: OFF");
 			else sprintf((char *)ascii, " Buzzer: ON ");
@@ -610,9 +610,9 @@ TickType_t drawSetupMenu(TFT_t * dev, FontxFile *fx, user_settings_t *user_setti
 			lcdDrawString(dev, fx, xpos, ypos, ascii, color);
 		}
 
-		if (current_index == 2 || previous_index == 2 || first_draw)
+		if (current_index == SETTING_SPEED || previous_index == SETTING_SPEED || first_draw)
 		{
-			if (current_index == 2) color = WHITE;
+			if (current_index == SETTING_SPEED) color = WHITE;
 			else color = GRAY;
 			if (user_settings->display_mph) sprintf((char *)ascii, " Speed: MPH ");
 			else sprintf((char *)ascii, " Speed: KPH ");
@@ -621,9 +621,9 @@ TickType_t drawSetupMenu(TFT_t * dev, FontxFile *fx, user_settings_t *user_setti
 			lcdDrawString(dev, fx, xpos, ypos, ascii, color);
 		}
 
-		if (current_index == 3 || previous_index == 3 || first_draw)
+		if (current_index == SETTING_TEMP || previous_index == SETTING_TEMP || first_draw)
 		{
-			if (current_index == 3) color = WHITE;
+			if (current_index == SETTING_TEMP) color = WHITE;
 			else color = GRAY;
 			if (user_settings->dispaly_fahrenheit) sprintf((char *)ascii, "Temp: Fahrenheit");
 			else sprintf((char *)ascii, "  Temp: Celsius  ");
@@ -632,9 +632,9 @@ TickType_t drawSetupMenu(TFT_t * dev, FontxFile *fx, user_settings_t *user_setti
 			lcdDrawString(dev, fx, xpos, ypos, ascii, color);
 		}
 
-		if (current_index == 4 || previous_index == 4 || first_draw)
+		if (current_index == SETTING_THROTTLE || previous_index == SETTING_THROTTLE || first_draw)
 		{
-			if (current_index == 4) color = WHITE;
+			if (current_index == SETTING_THROTTLE) color = WHITE;
 			else color = GRAY;
 			if (user_settings->throttle_reverse) sprintf((char *)ascii, " Throttle: Reverse ");
 			else sprintf((char *)ascii, " Throttle: Forward ");
@@ -643,9 +643,9 @@ TickType_t drawSetupMenu(TFT_t * dev, FontxFile *fx, user_settings_t *user_setti
 			lcdDrawString(dev, fx, xpos, ypos, ascii, color);
 		}
 
-		if (current_index == 5 || previous_index == 5 || first_draw)
+		if (current_index == SETTING_MODEL || previous_index == SETTING_MODEL || first_draw)
 		{
-			if (current_index == 5) color = WHITE;
+			if (current_index == SETTING_MODEL) color = WHITE;
 			else color = GRAY;
 			switch (user_settings->remote_model) {
 				case MODEL_UNDEFINED:
