@@ -167,7 +167,6 @@ static void piezo_test(void *arg)
 #define GPIO_INPUT_IO_4     23 //USB_PRES
 #define GPIO_INPUT_PIN_SEL  ((1ULL<<GPIO_INPUT_IO_0) | (1ULL<<GPIO_INPUT_IO_1) | (1ULL<<GPIO_INPUT_IO_2) | (1ULL<<GPIO_INPUT_IO_3))
 #define GPIO_INPUT_PINS_UP  ((1ULL<<GPIO_INPUT_IO_4))
-#define ESP_INTR_FLAG_DEFAULT 0
 
 int gpio_switch_1 = 0;
 int gpio_switch_2 = 0;
@@ -193,8 +192,8 @@ static void gpio_input_task(void* arg)
 
 	while (true) {
 		if (xQueueReceive(button_events, &ev, 1000/portTICK_PERIOD_MS)) {
-			if ((ev.pin == GPIO_INPUT_IO_1) && (ev.event == BUTTON_DOWN)) {
-				// INPUT 1
+			if ((ev.pin == GPIO_INPUT_IO_0) && (ev.event == BUTTON_DOWN)) {
+				// User Button (SW3 on HW v1.2 PCB)
 				if (remote_in_setup_mode)
 				{
 					switch(user_settings_index) 
@@ -231,8 +230,8 @@ static void gpio_input_task(void* arg)
 					display_blank_now = true;
 				}
 			}
-			if ((ev.pin == GPIO_INPUT_IO_1) && (ev.event == BUTTON_DOUBLE_CLICK)) {
-				// INPUT 1
+			if ((ev.pin == GPIO_INPUT_IO_0) && (ev.event == BUTTON_DOUBLE_CLICK)) {
+				// SW3 on HW v1.2 PCB
 				melody_play(MELODY_STARTUP, true);
 				is_throttle_locked = !is_throttle_locked; // Toggle throttle lock
 				if (is_throttle_locked)
@@ -243,13 +242,14 @@ static void gpio_input_task(void* arg)
 				else display_blank_now = true; // Clear the display if we turn off throttle lock
 				ESP_LOGI(__FUNCTION__, "Throttle lock is %d", is_throttle_locked);
 			}
-			if ((ev.pin == GPIO_INPUT_IO_2) && (ev.event == BUTTON_DOWN)) {
-				// INPUT 2
+			if ((ev.pin == GPIO_INPUT_IO_1) && (ev.event == BUTTON_DOWN)) {
+				// SW1 on HW v1.2 PCB
 			}
-			if ((ev.pin == GPIO_INPUT_IO_0) && (ev.event == BUTTON_DOWN)) {
-				// INPUT 3
+			if ((ev.pin == GPIO_INPUT_IO_2) && (ev.event == BUTTON_DOWN)) {
+				// SW2 on HW v1.2 PCB
 			}
 			if ((ev.pin == GPIO_INPUT_IO_3) && (ev.event == BUTTON_HELD)) {
+				melody_play(MELODY_GPS_LOST, true);
 				/// Turn battery power off
 				gpio_set_level(GPIO_OUTPUT_IO_1, 0);
 			}
@@ -321,7 +321,7 @@ static void i2c_task(void *arg)
 		{
 			// Map throttle, checking for reversed user setting
 			if (my_user_settings.throttle_reverse) joystick_value_mapped = 255 - map(adc_raw_joystick, 2, 1632, 0, 255);
-			else joystick_value_mapped = map(adc_raw_joystick, 2, 1632, 0, 255);
+			else joystick_value_mapped = map(adc_raw_joystick, 0, 1700, 0, 255);
 
 			// On first read only
 			if (adc_is_first_read)
@@ -345,8 +345,8 @@ static void i2c_task(void *arg)
 			joystick_value_mapped = CENTER_JOYSTICK; //NOTE: Zero input if is_throttle_locked
 		}
 
-		adc_raw_battery_level = ADS1015_readADC_SingleEnded(1);
-		adc_raw_joystick_2 = ADS1015_readADC_SingleEnded(2);
+		adc_raw_battery_level = ADS1015_readADC_SingleEnded(2);
+		adc_raw_joystick_2 = ADS1015_readADC_SingleEnded(1);
 		adc_raw_rssi = ADS1015_readADC_SingleEnded(3);
 
 		/* IMU */
