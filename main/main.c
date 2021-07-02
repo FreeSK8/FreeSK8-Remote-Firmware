@@ -846,16 +846,16 @@ void ST7789_Task(void *pvParameters)
 			//TODO: left vs right handed values: my_user_settings.throttle_reverse ?
 			case MODEL_ALBERT:
 				//TODO: estimated
-				if (accel_g_x > 0.1 || accel_g_z > 0.4) is_display_visible = false;
+				if (accel_g_x > 0.7 || accel_g_z > 0.4) is_display_visible = false;
 				else is_display_visible = true;
 			break;
 			case MODEL_BRUCE:
-				if (accel_g_x > 0.5 || accel_g_z > 0.3) is_display_visible = false;
+				if (accel_g_y > 0.5 || accel_g_z > 0.3) is_display_visible = false;
 				else is_display_visible = true;
 			break;
 			case MODEL_CLINT:
 				//TODO: estimated
-				if (accel_g_x > 0.2 || accel_g_y > 0.5) is_display_visible = false;
+				if (accel_g_y > 0.5 || accel_g_x > 0.6) is_display_visible = false;
 				else is_display_visible = true;
 			break;
 		}
