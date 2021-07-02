@@ -127,9 +127,9 @@ TickType_t drawScreenDeveloper(TFT_t * dev, FontxFile *fx, int width, int height
 	//ESP_LOGI(__FUNCTION__, "elapsed time[ms]:%d",diffTick*portTICK_RATE_MS);
 	return diffTick;
 }
-
-const int adc_raw_battery_minimum = 825;
-const int adc_raw_battery_maximum = 1052;
+//batt 658 = 3.985V
+const int adc_raw_battery_minimum = 500; //TODO: estimated
+const int adc_raw_battery_maximum = 700; //TODO: estimated
 const int adc_raw_rssi_maximum = 1639;
 const int adc_raw_rssi_minimum = 850;
 static uint8_t rssi_mapped_previous;
