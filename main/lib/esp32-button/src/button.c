@@ -143,7 +143,7 @@ QueueHandle_t button_init(unsigned long long pin_select, unsigned long long pin_
     gpio_config(&io_conf);
 
     io_conf.pull_up_en = 1;
-    io_conf.pull_down_en = 1;
+    io_conf.pull_down_en = 0;
     io_conf.pin_bit_mask = pin_select_pullups;
     gpio_config(&io_conf);
 
