@@ -290,6 +290,30 @@ static void gpio_init_remote()
 
 
 /* I2C Tasks */
+void haptic_test()
+{
+	int8_t speed = 10;
+	uint8_t addr = 0xC0; // A0 & A1 are pulled low = 0xC0
+	uint8_t regValue = 0x80;			// Before we do anything, we'll want to
+									//  clear the fault status. To do that
+									//  write 0x80 to register 0x01 on the
+									//  DRV8830.
+	i2c_master_write_slave_reg(I2C_PORT_NUM, addr, 0x01, &regValue, 1); // Clear the fault status.
+
+	regValue = abs(speed);      // Find the byte-ish abs value of the input
+	if (regValue > 63) regValue = 63; // Cap the value at 63.
+	regValue = regValue<<2;           // Left shift to make room for bits 1:0
+	if (speed < 0) regValue |= 0x01;  // Set bits 1:0 based on sign of input.
+	else           regValue |= 0x02;
+
+	i2c_master_write_slave_reg(I2C_PORT_NUM, addr, 0x00, &regValue, 1);
+
+	vTaskDelay(1000/portTICK_PERIOD_MS);
+
+	regValue = 0;                // See above for bit 1:0 explanation.
+	i2c_master_write_slave_reg(I2C_PORT_NUM, addr, 0x00, &regValue, 1); // Stop
+
+}
 #include "lib/ADS1015/src/ADS1015.h"
 
 uint16_t adc_raw_joystick;
@@ -935,7 +959,7 @@ void app_main(void)
 	mpu6050_set_full_scale_accel_range(MPU6050_ACCEL_FULL_SCALE_RANGE_16);
 
 	//TODO: haptic fails :(
-	//haptic_test();
+	haptic_test();
 
 	ESP_LOGI(TAG, "Initializing SPIFFS");
 
