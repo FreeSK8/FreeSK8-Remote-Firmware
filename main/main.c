@@ -19,8 +19,7 @@
 #include "esp-i2c.h"
 #include "display.h"
 
-void print_haptic_registers();
-void test_haptic_now();
+#include "lib/haptic/haptic.h"
 
 float accel_g_x, accel_g_x_delta;
 float accel_g_y, accel_g_y_delta;
@@ -110,6 +109,7 @@ static void piezo_test(void *arg)
     ledc_fade_func_install(0);
 
 	melody_play(MELODY_LOG_START, true);
+	haptic_play(MELODY_LOG_START, true);
 	TickType_t startTick = xTaskGetTickCount();
 	TickType_t endTick, diffTick;
 	bool was_remote_idle = false;
@@ -233,6 +233,7 @@ static void gpio_input_task(void* arg)
 			if ((ev.pin == GPIO_INPUT_IO_0) && (ev.event == BUTTON_DOUBLE_CLICK)) {
 				// SW3 on HW v1.2 PCB
 				melody_play(MELODY_STARTUP, true);
+				haptic_play(MELODY_STARTUP, true);
 				is_throttle_locked = !is_throttle_locked; // Toggle throttle lock
 				if (is_throttle_locked)
 				{
@@ -250,6 +251,10 @@ static void gpio_input_task(void* arg)
 			}
 			if ((ev.pin == GPIO_INPUT_IO_3) && (ev.event == BUTTON_HELD)) {
 				melody_play(MELODY_GPS_LOST, true);
+				haptic_play(MELODY_GPS_LOST, true);
+				ESP_LOGI(__FUNCTION__, "Setting MCU_LATCH to 0");
+				/// Turn Power switch LED off
+				gpio_set_level(GPIO_OUTPUT_IO_0, 0);
 				/// Turn battery power off
 				gpio_set_level(GPIO_OUTPUT_IO_1, 0);
 			}
@@ -290,30 +295,6 @@ static void gpio_init_remote()
 
 
 /* I2C Tasks */
-void haptic_test()
-{
-	int8_t speed = 10;
-	uint8_t addr = 0xC0; // A0 & A1 are pulled low = 0xC0
-	uint8_t regValue = 0x80;			// Before we do anything, we'll want to
-									//  clear the fault status. To do that
-									//  write 0x80 to register 0x01 on the
-									//  DRV8830.
-	i2c_master_write_slave_reg(I2C_PORT_NUM, addr, 0x01, &regValue, 1); // Clear the fault status.
-
-	regValue = abs(speed);      // Find the byte-ish abs value of the input
-	if (regValue > 63) regValue = 63; // Cap the value at 63.
-	regValue = regValue<<2;           // Left shift to make room for bits 1:0
-	if (speed < 0) regValue |= 0x01;  // Set bits 1:0 based on sign of input.
-	else           regValue |= 0x02;
-
-	i2c_master_write_slave_reg(I2C_PORT_NUM, addr, 0x00, &regValue, 1);
-
-	vTaskDelay(1000/portTICK_PERIOD_MS);
-
-	regValue = 0;                // See above for bit 1:0 explanation.
-	i2c_master_write_slave_reg(I2C_PORT_NUM, addr, 0x00, &regValue, 1); // Stop
-
-}
 #include "lib/ADS1015/src/ADS1015.h"
 
 uint16_t adc_raw_joystick;
@@ -388,6 +369,9 @@ static void i2c_task(void *arg)
 		accel_g_z = (0.8 * accel_gz) + (0.2 * accel_g_z);
 
 		//ESP_LOGI(__FUNCTION__, "ADC joy1:%d joy2:%d batt:%d rssi:%d IMU x:%f y:%f z:%f", adc_raw_joystick, adc_raw_joystick_2, adc_raw_battery_level, adc_raw_rssi, accel_g_x, accel_g_y, accel_g_z);
+
+		/* Haptic */
+		if (!my_user_settings.disable_buzzer) haptic_step();
 	}
 }
 /* I2C Tasks */
@@ -957,9 +941,6 @@ void app_main(void)
 	// Minimum mpu6050 init to get uncalibrated values
 	mpu6050_init();
 	mpu6050_set_full_scale_accel_range(MPU6050_ACCEL_FULL_SCALE_RANGE_16);
-
-	//TODO: haptic fails :(
-	haptic_test();
 
 	ESP_LOGI(TAG, "Initializing SPIFFS");
 
