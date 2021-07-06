@@ -109,4 +109,31 @@ enum {
     MELODY_GPS_LOST,
 };
 
+extern const int melody_gotchi_fault[226];
+extern const int tempo_gotchi_fault;
+extern const int melody_esc_fault[10];
+extern const int tempo_esc_fault;
+extern const int melody_ble_fail[6];
+extern const int tempo_ble_fail;
+extern const int melody_ble_success[6];
+extern const int tempo_ble_success;
+extern const int melody_storage_limit[12];
+extern const int tempo_storage_limit;
+extern const int melody_esc_temp[8];
+extern const int tempo_esc_temp;
+extern const int melody_motor_temp[10];
+extern const int tempo_motor_temp;
+extern const int melody_voltage_low[6];
+extern const int tempo_voltage_low;
+extern const int melody_ascending[8];
+extern const int tempo_ascending;
+extern const int melody_descending[8];
+extern const int tempo_descending;
+extern const int melody_startup[24];
+extern const int tempo_startup;
+extern const int melody_gps_locked[12];
+extern const int tempo_gps_locked;
+extern const int melody_gps_lost[12];
+extern const int tempo_gps_lost;
+
 #endif
