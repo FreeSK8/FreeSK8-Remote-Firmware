@@ -150,6 +150,8 @@ typedef enum
 #define ACK_VAL                            0x0              /*!< I2C ack value */
 #define NACK_VAL                           0x1              /*!< I2C nack value */
 
+#define ADS1015_ERROR 0xFFFF
+
 uint8_t _address;
 SemaphoreHandle_t _semaphore;
 

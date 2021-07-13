@@ -108,6 +108,7 @@ uint16_t ADS1015_readADC_SingleEnded(uint8_t channel)
     if (xSemaphoreTake(_semaphore, ADS1015_CONVERSIONDELAY / portTICK_RATE_MS) != pdTRUE)
     {
         ESP_LOGE(__FUNCTION__, "ERROR ADS1015::readADC_SingleEnded : could not wait for adc semaphore after interrupt.\n");
+        return ADS1015_ERROR;
     }
 
     // Read the conversion results

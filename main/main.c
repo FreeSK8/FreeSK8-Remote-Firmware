@@ -320,9 +320,10 @@ static void i2c_task(void *arg)
 	while(1)
 	{
 		/* ADC */
+		//TODO: osrr_state.adc.error = true;
 		adc_raw_joystick = ADS1015_readADC_SingleEnded(0);
 		// Update joystick value if throttle is not locked
-		if (!is_throttle_locked)
+		if (!is_throttle_locked && adc_raw_joystick != ADS1015_ERROR)
 		{
 			// Map throttle, checking for reversed user setting
 			if (my_user_settings.throttle_reverse) joystick_value_mapped = 255 - map(adc_raw_joystick, 2, 1632, 0, 255);
@@ -334,13 +335,13 @@ static void i2c_task(void *arg)
 				adc_is_first_read = false;
 				// Check for full stick input to enter setup mode
 				if (joystick_value_mapped < 3 || joystick_value_mapped > 251) {
-					ESP_LOGI(__FUNCTION__, "Remote entering setup mode");
+					ESP_LOGI(__FUNCTION__, "Remote entering setup mode (%d)", joystick_value_mapped);
 					remote_in_setup_mode = true;
 					display_blank_now = true;
 				}
 				// Check for center stick
 				else if (joystick_value_mapped < CENTER_JOYSTICK - 5 || joystick_value_mapped > CENTER_JOYSTICK + 5) {
-					ESP_LOGW(__FUNCTION__, "Joystick not center on startup. Locking throttle");
+					ESP_LOGW(__FUNCTION__, "Joystick not center (%d) on startup. Locking throttle", joystick_value_mapped);
 					is_throttle_locked = true;
 				}
 			}
@@ -369,6 +370,11 @@ static void i2c_task(void *arg)
 		accel_g_z = (0.8 * accel_gz) + (0.2 * accel_g_z);
 
 		//ESP_LOGI(__FUNCTION__, "ADC joy1:%d joy2:%d batt:%d rssi:%d IMU x:%f y:%f z:%f", adc_raw_joystick, adc_raw_joystick_2, adc_raw_battery_level, adc_raw_rssi, accel_g_x, accel_g_y, accel_g_z);
+
+		if (accel_g_x == 0 && accel_g_y == 0 && accel_g_z == 0) {
+			ESP_LOGE(__FUNCTION__, "IMU not responding");
+			//TODO: osrr_state.imu.error = true;
+		}
 
 		/* Haptic */
 		if (!my_user_settings.disable_buzzer) haptic_step();
@@ -420,7 +426,9 @@ void process_packet_vesc(unsigned char *data, unsigned int len) {
 			esc_telemetry_last_fault = esc_telemetry;
 			if (!alert_visible) alert_show = true;
 		}
-		//ESP_LOGI(__FUNCTION__, "Temp ESC %f Motor %f, Current In %f Out %f, Speed %f, Voltage %f Fault %d ESCs %d", esc_telemetry.temp_mos, esc_telemetry.temp_motor, esc_telemetry.current_in, esc_telemetry.current_motor, esc_telemetry.speed, esc_telemetry.v_in, esc_telemetry.fault_code, esc_telemetry.num_vescs);
+		ESP_LOGI(__FUNCTION__, "Temp ESC %f Motor %f, Current In %f Out %f, Speed %f, Voltage %f Fault %d ESCs %d", esc_telemetry.temp_mos, esc_telemetry.temp_motor, esc_telemetry.current_in, esc_telemetry.current_motor, esc_telemetry.speed, esc_telemetry.v_in, esc_telemetry.fault_code, esc_telemetry.num_vescs);
+	} else {
+		ESP_LOGW(__FUNCTION__, "Unknown message type received from ESC (%d)", data[0]);
 	}
 }
 /* VESC */
@@ -518,6 +526,9 @@ static bool xbee_wait_ok(uint8_t *data, bool is_fatal)
 }
 static void xbee_task(void *arg)
 {
+	//TODO: Wait for ADC task to read Joystick and determine Setup Mode (don't send full throttle) or Throttle Lock
+	vTaskDelay(250/portTICK_PERIOD_MS);
+
     /* Configure parameters of an UART driver,
      * communication pins and install the driver */
     uart_config_t uart_config = {
@@ -833,39 +844,48 @@ void ST7789_Task(void *pvParameters)
 			vTaskDelay(10/portTICK_PERIOD_MS);
 			continue;
 		}
-		// Check if remote is idle
-		const float delta_threshold = 0.025;
-		if (accel_g_x_delta > delta_threshold || accel_g_y_delta > delta_threshold || accel_g_z_delta > delta_threshold)
-		{
-			idle_delay = 0;
-			if (is_remote_idle) {
-				resetPreviousValues();
-			}
+
+		// Check for functional IMU
+		//TODO: if (osrr_state.imu.error == true){}
+		if (accel_g_x == 0 && accel_g_y == 0 && accel_g_z == 0) {
+			// Not functional, leave display on
+			is_display_visible = true;
 			is_remote_idle = false;
-		}
-		else if (++idle_delay > 30)
-		{
-			idle_delay = 0;
-			is_remote_idle = true;
-		}
-		// Check if remote is in a visible orientation
-		switch (my_user_settings.remote_model)
-		{
-			//TODO: left vs right handed values: my_user_settings.throttle_reverse ?
-			case MODEL_ALBERT:
-				//TODO: estimated
-				if (accel_g_x > 0.7 || accel_g_z > 0.4) is_display_visible = false;
-				else is_display_visible = true;
-			break;
-			case MODEL_BRUCE:
-				if (accel_g_y > 0.5 || accel_g_z > 0.3) is_display_visible = false;
-				else is_display_visible = true;
-			break;
-			case MODEL_CLINT:
-				//TODO: estimated
-				if (accel_g_y > 0.5 || accel_g_x > 0.6) is_display_visible = false;
-				else is_display_visible = true;
-			break;
+		} else {
+			// Check if remote is idle via IMU
+			const float delta_threshold = 0.025;
+			if (accel_g_x_delta > delta_threshold || accel_g_y_delta > delta_threshold || accel_g_z_delta > delta_threshold)
+			{
+				idle_delay = 0;
+				if (is_remote_idle) {
+					resetPreviousValues();
+				}
+				is_remote_idle = false;
+			}
+			else if (++idle_delay > 30)
+			{
+				idle_delay = 0;
+				is_remote_idle = true;
+			}
+			// Check if remote is in a visible orientation
+			switch (my_user_settings.remote_model)
+			{
+				//TODO: left vs right handed values: my_user_settings.throttle_reverse ?
+				case MODEL_ALBERT:
+					//TODO: estimated
+					if (accel_g_x > 0.7 || accel_g_z > 0.4) is_display_visible = false;
+					else is_display_visible = true;
+				break;
+				case MODEL_BRUCE:
+					if (accel_g_y > 0.5 || accel_g_z > 0.3) is_display_visible = false;
+					else is_display_visible = true;
+				break;
+				case MODEL_CLINT:
+					//TODO: estimated
+					if (accel_g_y > 0.5 || accel_g_x > 0.6) is_display_visible = false;
+					else is_display_visible = true;
+				break;
+			}
 		}
 
 		// Switch the backlight to save power
