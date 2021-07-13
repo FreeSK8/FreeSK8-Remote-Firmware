@@ -185,7 +185,7 @@ static void gpio_input_task(void* arg)
 	gpio_usb_detect = !gpio_get_level(GPIO_INPUT_IO_4);
 
 	// Check if we are to enter pairing mode
-	if (!gpio_get_level(GPIO_INPUT_IO_1))
+	if (!gpio_get_level(GPIO_INPUT_IO_0))
 	{
 		remote_in_pairing_mode = true;
 	}
@@ -677,7 +677,7 @@ void setNunchuckValues() {
 	int32_t ind = 0;
 	uint8_t payload[11];
 
-	payload[ind++] = 35; //COMM_SET_CHUCK_DATA;
+	payload[ind++] = COMM_SET_CHUCK_DATA;
 	payload[ind++] = 127;//nunchuck.valueX;
 	payload[ind++] = joystick_value_mapped;//nunchuck.valueY;
 	buffer_append_bool(payload, 0/*nunchuck.lowerButton*/, &ind);
