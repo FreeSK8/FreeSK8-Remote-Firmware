@@ -25,10 +25,11 @@ float accel_g_x, accel_g_x_delta;
 float accel_g_y, accel_g_y_delta;
 float accel_g_z, accel_g_z_delta;
 
-bool is_remote_idle = true;
+bool is_remote_idle = true; //NOTE: Controlled by IMU
 bool display_second_screen = false;
 bool display_blank_now = false;
 
+bool is_throttle_idle = false;
 bool is_throttle_locked = false;
 
 /* User Settings */
@@ -114,6 +115,19 @@ static void piezo_test(void *arg)
 	TickType_t endTick, diffTick;
 	bool was_remote_idle = false;
     while (1) {
+		// Low Battery Alert
+		if (adc_raw_battery_level < 525 || adc_raw_battery_level == ADS1015_ERROR) //TODO: Don't hardcode 525 as minimum battery value
+		{
+			melody_play(MELODY_GOTCHI_FAULT, false);
+			//NOTE: No Haptics PLEASE
+		}
+		// Idle Throttle Alert
+		if (is_throttle_idle) {
+			melody_play(MELODY_ESC_FAULT, false);
+			//NOTE: No Haptics
+		}
+
+		// Idle IMU Alert
 		if (is_remote_idle)
 		{
 			if (!was_remote_idle)
@@ -301,6 +315,7 @@ uint16_t adc_raw_joystick;
 uint16_t adc_raw_joystick_2;
 uint16_t adc_raw_battery_level;
 uint16_t adc_raw_rssi;
+#define JOYSTICK_OFF_CENTER 5
 #define CENTER_JOYSTICK 127
 uint8_t joystick_value_mapped = CENTER_JOYSTICK;
 long map(long x, long in_min, long in_max, long out_min, long out_max);
@@ -315,6 +330,9 @@ static void i2c_task(void *arg)
 
 	int8_t range = mpu6050_get_full_scale_accel_range();
 	float accel_res = mpu6050_get_accel_res(range);
+
+	bool was_throttle_idle = false;
+	TickType_t startTickThrottleIdle = xTaskGetTickCount();
 
 	ADS1015_init();
 	while(1)
@@ -340,10 +358,30 @@ static void i2c_task(void *arg)
 					display_blank_now = true;
 				}
 				// Check for center stick
-				else if (joystick_value_mapped < CENTER_JOYSTICK - 5 || joystick_value_mapped > CENTER_JOYSTICK + 5) {
+				else if (joystick_value_mapped < CENTER_JOYSTICK - JOYSTICK_OFF_CENTER || joystick_value_mapped > CENTER_JOYSTICK + JOYSTICK_OFF_CENTER) {
 					ESP_LOGW(__FUNCTION__, "Joystick not center (%d) on startup. Locking throttle", joystick_value_mapped);
 					is_throttle_locked = true;
 				}
+			}
+			// Check if joystick is center to determine if it's in use
+			if (joystick_value_mapped > CENTER_JOYSTICK - JOYSTICK_OFF_CENTER && joystick_value_mapped < CENTER_JOYSTICK + JOYSTICK_OFF_CENTER)
+			{
+				if (!was_throttle_idle)
+				{
+					was_throttle_idle = true;
+					startTickThrottleIdle = xTaskGetTickCount();
+				}
+				if (!gpio_usb_detect)
+				{
+					// Check if we've been idle for more than 5 seconds
+					if ((xTaskGetTickCount() - startTickThrottleIdle)*portTICK_RATE_MS > 5 * 60 * 1000)
+					{
+						is_throttle_idle = true;
+					}
+				}
+			} else {
+				was_throttle_idle = false;
+				is_throttle_idle = false;
 			}
 		}
 		else
@@ -642,6 +680,7 @@ static void xbee_task(void *arg)
 				sprintf(str_pairing_3, "Pairing was");
 				sprintf(str_pairing_4, "Successful");
 				melody_play(MELODY_BLE_SUCCESS, true);
+				haptic_play(MELODY_BLE_SUCCESS, true);
 			}
 			else
 			{
@@ -649,6 +688,7 @@ static void xbee_task(void *arg)
 				sprintf(str_pairing_3, "Pairing");
 				sprintf(str_pairing_4, "FAILED");
 				melody_play(MELODY_BLE_FAIL, true);
+				haptic_play(MELODY_BLE_FAIL, true);
 				vTaskDelay(10000/portTICK_PERIOD_MS);
 			}
 			display_blank_now = true;
