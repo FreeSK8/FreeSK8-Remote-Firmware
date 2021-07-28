@@ -83,7 +83,7 @@ TickType_t drawScreenDeveloper(TFT_t * dev, FontxFile *fx, int width, int height
 	
 
 
-	sprintf((char *)ascii, "S:%d,%d,%d U:%d", gpio_switch_1, gpio_switch_2, gpio_switch_3, gpio_usb_detect);
+	sprintf((char *)ascii, "T:%d U:%d", xTaskGetTickCount() * portTICK_PERIOD_MS / 1000, gpio_usb_detect);
 	if (width < height) {
 		xpos = ((width - fontHeight) / 2) + 75;
 		ypos = (height - (strlen((char *)ascii) * fontWidth)) / 2;

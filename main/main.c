@@ -10,6 +10,8 @@
 #include "esp_vfs.h"
 #include "esp_spiffs.h"
 
+#include "lib/ADS1015/src/ADS1015.h"
+
 #include "lib/st7789/st7789.h"
 #include "lib/st7789/fontx.h"
 #include "lib/st7789/bmpfile.h"
