@@ -23,6 +23,7 @@
 
 #include "lib/haptic/haptic.h"
 
+int gyro_x, gyro_y, gyro_z;
 float accel_g_x, accel_g_x_delta;
 float accel_g_y, accel_g_y_delta;
 float accel_g_z, accel_g_z_delta;
@@ -33,6 +34,8 @@ bool display_blank_now = false;
 
 bool is_throttle_idle = false;
 bool is_throttle_locked = false;
+
+TickType_t esc_last_responded = 0;
 
 /* User Settings */
 #include "user-settings.h"
@@ -326,6 +329,7 @@ static bool adc_is_first_read = true;
 
 static void i2c_task(void *arg)
 {
+	mpu6050_rotation_t gyro;
 	mpu6050_acceleration_t accel;
 	float accel_bias[3] = {0, 0, 0};
 	//float gyro_bias[3] = {0, 0, 0};
@@ -396,6 +400,7 @@ static void i2c_task(void *arg)
 		adc_raw_rssi = ADS1015_readADC_SingleEnded(3);
 
 		/* IMU */
+		mpu6050_get_rotation(&gyro);
 		mpu6050_get_acceleration(&accel);
 
 		float accel_gx = (float) accel.accel_x * accel_res - accel_bias[0];
@@ -409,7 +414,11 @@ static void i2c_task(void *arg)
 		accel_g_y = (0.8 * accel_gy) + (0.2 * accel_g_y);
 		accel_g_z = (0.8 * accel_gz) + (0.2 * accel_g_z);
 
+		gyro_x = gyro.gyro_x;
+		gyro_y = gyro.gyro_y;
+		gyro_z = gyro.gyro_z;
 		//ESP_LOGI(__FUNCTION__, "ADC joy1:%d joy2:%d batt:%d rssi:%d IMU x:%f y:%f z:%f", adc_raw_joystick, adc_raw_joystick_2, adc_raw_battery_level, adc_raw_rssi, accel_g_x, accel_g_y, accel_g_z);
+		//ESP_LOGI(__FUNCTION__, "IMU x:%d y:%d z:%d", gyro_x, gyro_y, gyro_z);
 
 		if (accel_g_x == 0 && accel_g_y == 0 && accel_g_z == 0) {
 			ESP_LOGE(__FUNCTION__, "IMU not responding");
@@ -437,7 +446,7 @@ static void uart_send_buffer(unsigned char *data, unsigned int len) {
 	uart_write_bytes(1/*TODO: undefined: XBEE_UART_PORT_NUM*/, data, len);
 }
 void process_packet_vesc(unsigned char *data, unsigned int len) {
-
+	esc_last_responded = xTaskGetTickCount();
 	if (data[0] == COMM_GET_VALUES_SETUP)
 	{
 		int index = 1;
@@ -465,6 +474,8 @@ void process_packet_vesc(unsigned char *data, unsigned int len) {
 		if (esc_telemetry.fault_code != FAULT_CODE_NONE) {
 			esc_telemetry_last_fault = esc_telemetry;
 			if (!alert_visible) alert_show = true;
+			melody_play(MELODY_ESC_FAULT, false);
+			haptic_play(MELODY_ESC_FAULT, false);
 		}
 		ESP_LOGI(__FUNCTION__, "Temp ESC %f Motor %f, Current In %f Out %f, Speed %f, Voltage %f Fault %d ESCs %d", esc_telemetry.temp_mos, esc_telemetry.temp_motor, esc_telemetry.current_in, esc_telemetry.current_motor, esc_telemetry.speed, esc_telemetry.v_in, esc_telemetry.fault_code, esc_telemetry.num_vescs);
 	} else {
@@ -895,19 +906,21 @@ void ST7789_Task(void *pvParameters)
 			is_remote_idle = false;
 		} else {
 			// Check if remote is idle via IMU
-			const float delta_threshold = 0.025;
-			if (accel_g_x_delta > delta_threshold || accel_g_y_delta > delta_threshold || accel_g_z_delta > delta_threshold)
+			const int gyro_threshold = 1000; //TODO: define threshold
+			if (abs(gyro_x) > gyro_threshold || abs(gyro_y) > gyro_threshold || abs(gyro_z) > gyro_threshold)
 			{
 				idle_delay = 0;
 				if (is_remote_idle) {
+					printf("remote is moving %d, %d, %d\n", gyro_x, gyro_y, gyro_z);
 					resetPreviousValues();
 				}
 				is_remote_idle = false;
 			}
-			else if (++idle_delay > 30)
+			else if (++idle_delay > 50)
 			{
 				idle_delay = 0;
 				is_remote_idle = true;
+				printf("remote is idle %d, %d, %d\n", gyro_x, gyro_y, gyro_z);
 			}
 			// Check if remote is in a visible orientation
 			switch (my_user_settings.remote_model)
@@ -965,11 +978,13 @@ void ST7789_Task(void *pvParameters)
 			{
 				// Display throttle locked alert over drawScreenPrimary
 				drawAlert(&dev, fx24G, RED, "Throttle", "locked", "", "Double click", "to unlock");
-				drawScreenPrimary(&dev, fx24G, CONFIG_WIDTH, CONFIG_HEIGHT, &my_user_settings);
+				if (my_user_settings.remote_model == MODEL_ALBERT) drawScreenRound(&dev, fx24G, CONFIG_WIDTH, CONFIG_HEIGHT, &my_user_settings);
+				else drawScreenPrimary(&dev, fx24G, CONFIG_WIDTH, CONFIG_HEIGHT, &my_user_settings);
 			}
 			else
 			{
-				drawScreenPrimary(&dev, fx24G, CONFIG_WIDTH, CONFIG_HEIGHT, &my_user_settings);
+				if (my_user_settings.remote_model == MODEL_ALBERT) drawScreenRound(&dev, fx24G, CONFIG_WIDTH, CONFIG_HEIGHT, &my_user_settings);
+				else drawScreenPrimary(&dev, fx24G, CONFIG_WIDTH, CONFIG_HEIGHT, &my_user_settings);
 			}
 		}
 
@@ -1064,6 +1079,7 @@ void app_main(void)
 		ret = load_user_settings(&my_user_settings);
 	}
 	ESP_LOGI(__FUNCTION__, "Settings version=%d model=%d buzzer=%d piezo=%d fahrenheit=%d mph=%d", my_user_settings.settings_version, my_user_settings.remote_model, !my_user_settings.disable_buzzer, !my_user_settings.disable_piezo, my_user_settings.dispaly_fahrenheit, my_user_settings.display_mph);
+
 	// Display task
 	xTaskCreate(ST7789_Task, "display_task", 1024*4, NULL, 2, NULL);
 
@@ -1074,7 +1090,7 @@ void app_main(void)
 	xTaskCreate(xbee_task, "xbee_task", 1024 * 4, NULL, 10, NULL);
 
 	// Piezo task
-	xTaskCreate(piezo_test, "piezo_test", 1024 * 1, NULL, 10, NULL);
+	xTaskCreate(piezo_test, "piezo_test", 1024 * 2, NULL, 10, NULL);
 
 	// Just chillin
 	while(1)
