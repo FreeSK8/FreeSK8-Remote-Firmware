@@ -320,7 +320,7 @@ uint16_t adc_raw_joystick;
 uint16_t adc_raw_joystick_2;
 uint16_t adc_raw_battery_level;
 uint16_t adc_raw_rssi;
-#define JOYSTICK_OFF_CENTER 5
+#define JOYSTICK_OFF_CENTER 7
 #define CENTER_JOYSTICK 127
 uint8_t joystick_value_mapped = CENTER_JOYSTICK;
 long map(long x, long in_min, long in_max, long out_min, long out_max);
@@ -410,9 +410,9 @@ static void i2c_task(void *arg)
 		accel_g_x_delta = accel_g_x - accel_gx;
 		accel_g_y_delta = accel_g_y - accel_gy;
 		accel_g_z_delta = accel_g_z - accel_gz;
-		accel_g_x = (0.8 * accel_gx) + (0.2 * accel_g_x);
-		accel_g_y = (0.8 * accel_gy) + (0.2 * accel_g_y);
-		accel_g_z = (0.8 * accel_gz) + (0.2 * accel_g_z);
+		accel_g_x = (0.6 * accel_gx) + (0.4 * accel_g_x);
+		accel_g_y = (0.6 * accel_gy) + (0.4 * accel_g_y);
+		accel_g_z = (0.6 * accel_gz) + (0.4 * accel_g_z);
 
 		gyro_x = gyro.gyro_x;
 		gyro_y = gyro.gyro_y;
@@ -901,7 +901,7 @@ void ST7789_Task(void *pvParameters)
 		// Check for functional IMU
 		//TODO: if (osrr_state.imu.error == true){}
 		if (accel_g_x == 0 && accel_g_y == 0 && accel_g_z == 0) {
-			// Not functional, leave display on
+			// IMU Not functional, leave display on
 			is_display_visible = true;
 			is_remote_idle = false;
 		} else {
@@ -916,7 +916,7 @@ void ST7789_Task(void *pvParameters)
 				}
 				is_remote_idle = false;
 			}
-			else if (++idle_delay > 50)
+			else if (++idle_delay > 65)
 			{
 				idle_delay = 0;
 				is_remote_idle = true;
