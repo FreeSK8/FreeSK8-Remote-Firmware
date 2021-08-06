@@ -758,6 +758,105 @@ uint16_t rgb565_conv(uint16_t r,uint16_t g,uint16_t b) {
 	return (((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3));
 }
 
+static const uint8_t font1[] = {
+  0x00, 0x00, 0x00, 0x00, 0x00,      // Code for char
+  0x00, 0x06, 0x5F, 0x06, 0x00,      // Code for char !
+  0x07, 0x03, 0x00, 0x07, 0x03,      // Code for char "
+  0x24, 0x7E, 0x24, 0x7E, 0x24,      // Code for char #
+  0x24, 0x2B, 0x6A, 0x12, 0x00,      // Code for char $
+  0x63, 0x13, 0x08, 0x64, 0x63,      // Code for char %
+  0x36, 0x49, 0x56, 0x20, 0x50,      // Code for char &
+  0x00, 0x07, 0x03, 0x00, 0x00,      // Code for char '
+  0x00, 0x3E, 0x41, 0x00, 0x00,      // Code for char (
+  0x00, 0x41, 0x3E, 0x00, 0x00,      // Code for char )
+  0x08, 0x3E, 0x1C, 0x3E, 0x08,      // Code for char *
+  0x08, 0x08, 0x3E, 0x08, 0x08,      // Code for char +
+  0x00, 0xE0, 0x60, 0x00, 0x00,      // Code for char ,
+  0x08, 0x08, 0x08, 0x08, 0x08,      // Code for char -
+  0x00, 0x60, 0x60, 0x00, 0x00,      // Code for char .
+  0x20, 0x10, 0x08, 0x04, 0x02,      // Code for char /
+  0x3E, 0x51, 0x49, 0x45, 0x3E,      // Code for char 0
+  0x00, 0x42, 0x7F, 0x40, 0x00,      // Code for char 1
+  0x62, 0x51, 0x49, 0x49, 0x46,      // Code for char 2
+  0x22, 0x49, 0x49, 0x49, 0x36,      // Code for char 3
+  0x18, 0x14, 0x12, 0x7F, 0x10,      // Code for char 4
+  0x2F, 0x49, 0x49, 0x49, 0x31,      // Code for char 5
+  0x3C, 0x4A, 0x49, 0x49, 0x30,      // Code for char 6
+  0x01, 0x71, 0x09, 0x05, 0x03,      // Code for char 7
+  0x36, 0x49, 0x49, 0x49, 0x36,      // Code for char 8
+  0x06, 0x49, 0x49, 0x29, 0x1E,      // Code for char 9
+  0x00, 0x6C, 0x6C, 0x00, 0x00,      // Code for char :
+  0x00, 0xEC, 0x6C, 0x00, 0x00,      // Code for char ;
+  0x08, 0x14, 0x22, 0x41, 0x00,      // Code for char <
+  0x24, 0x24, 0x24, 0x24, 0x24,      // Code for char =
+  0x00, 0x41, 0x22, 0x14, 0x08,      // Code for char >
+  0x02, 0x01, 0x59, 0x09, 0x06,      // Code for char ?
+  0x3E, 0x41, 0x5D, 0x55, 0x1E,      // Code for char @
+  0x7E, 0x11, 0x11, 0x11, 0x7E,      // Code for char A
+  0x7F, 0x49, 0x49, 0x49, 0x36,      // Code for char B
+  0x3E, 0x41, 0x41, 0x41, 0x22,      // Code for char C
+  0x7F, 0x41, 0x41, 0x41, 0x3E,      // Code for char D
+  0x7F, 0x49, 0x49, 0x49, 0x41,      // Code for char E
+  0x7F, 0x09, 0x09, 0x09, 0x01,      // Code for char F
+  0x3E, 0x41, 0x49, 0x49, 0x7A,      // Code for char G
+  0x7F, 0x08, 0x08, 0x08, 0x7F,      // Code for char H
+  0x00, 0x41, 0x7F, 0x41, 0x00,      // Code for char I
+  0x30, 0x40, 0x40, 0x40, 0x3F,      // Code for char J
+  0x7F, 0x08, 0x14, 0x22, 0x41,      // Code for char K
+  0x7F, 0x40, 0x40, 0x40, 0x40,      // Code for char L
+  0x7F, 0x02, 0x04, 0x02, 0x7F,      // Code for char M
+  0x7F, 0x02, 0x04, 0x08, 0x7F,      // Code for char N
+  0x3E, 0x41, 0x41, 0x41, 0x3E,      // Code for char O
+  0x7F, 0x09, 0x09, 0x09, 0x06,      // Code for char P
+  0x3E, 0x41, 0x51, 0x21, 0x5E,      // Code for char Q
+  0x7F, 0x09, 0x09, 0x19, 0x66,      // Code for char R
+  0x26, 0x49, 0x49, 0x49, 0x32,      // Code for char S
+  0x01, 0x01, 0x7F, 0x01, 0x01,      // Code for char T
+  0x3F, 0x40, 0x40, 0x40, 0x3F,      // Code for char U
+  0x1F, 0x20, 0x40, 0x20, 0x1F,      // Code for char V
+  0x3F, 0x40, 0x3C, 0x40, 0x3F,      // Code for char W
+  0x63, 0x14, 0x08, 0x14, 0x63,      // Code for char X
+  0x07, 0x08, 0x70, 0x08, 0x07,      // Code for char Y
+  0x71, 0x49, 0x45, 0x43, 0x00,      // Code for char Z
+  0x00, 0x7F, 0x41, 0x41, 0x00,      // Code for char [
+  0x02, 0x04, 0x08, 0x10, 0x20,      // Code for <BackSlash>
+  0x00, 0x41, 0x41, 0x7F, 0x00,      // Code for char ]
+  0x04, 0x02, 0x01, 0x02, 0x04,      // Code for char ^
+  0x80, 0x80, 0x80, 0x80, 0x80,      // Code for char _
+  0x00, 0x03, 0x07, 0x00, 0x00,      // Code for char `
+  0x20, 0x54, 0x54, 0x54, 0x78,      // Code for char a
+  0x7F, 0x44, 0x44, 0x44, 0x38,      // Code for char b
+  0x38, 0x44, 0x44, 0x44, 0x28,      // Code for char c
+  0x38, 0x44, 0x44, 0x44, 0x7F,      // Code for char d
+  0x38, 0x54, 0x54, 0x54, 0x08,      // Code for char e
+  0x08, 0x7E, 0x09, 0x09, 0x00,      // Code for char f
+  0x18, 0xA4, 0xA4, 0xA4, 0x7C,      // Code for char g
+  0x7F, 0x04, 0x04, 0x78, 0x00,      // Code for char h
+  0x00, 0x00, 0x7D, 0x40, 0x00,      // Code for char i
+  0x40, 0x80, 0x84, 0x7D, 0x00,      // Code for char j
+  0x7F, 0x10, 0x28, 0x44, 0x00,      // Code for char k
+  0x00, 0x00, 0x7F, 0x40, 0x00,      // Code for char l
+  0x7C, 0x04, 0x18, 0x04, 0x78,      // Code for char m
+  0x7C, 0x04, 0x04, 0x78, 0x00,      // Code for char n
+  0x38, 0x44, 0x44, 0x44, 0x38,      // Code for char o
+  0xFC, 0x44, 0x44, 0x44, 0x38,      // Code for char p
+  0x38, 0x44, 0x44, 0x44, 0xFC,      // Code for char q
+  0x44, 0x78, 0x44, 0x04, 0x08,      // Code for char r
+  0x08, 0x54, 0x54, 0x54, 0x20,      // Code for char s
+  0x04, 0x3E, 0x44, 0x24, 0x00,      // Code for char t
+  0x3C, 0x40, 0x20, 0x7C, 0x00,      // Code for char u
+  0x1C, 0x20, 0x40, 0x20, 0x1C,      // Code for char v
+  0x3C, 0x60, 0x30, 0x60, 0x3C,      // Code for char w
+  0x6C, 0x10, 0x10, 0x6C, 0x00,      // Code for char x
+  0x9C, 0xA0, 0x60, 0x3C, 0x00,      // Code for char y
+  0x64, 0x54, 0x54, 0x4C, 0x00,      // Code for char z
+  0x08, 0x3E, 0x41, 0x41, 0x00,      // Code for char {
+  0x00, 0x00, 0x77, 0x00, 0x00,      // Code for char |
+  0x00, 0x41, 0x41, 0x3E, 0x08,      // Code for char }
+  0x02, 0x01, 0x02, 0x01, 0x00,      // Code for char ~
+  0x06, 0x09, 0x09, 0x06, 0x00       // Code for <Degrees>
+};
+
 static const uint8_t font2[] = {
 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 192, 192, 192, 192, 192, 192, 192, 192, 192, 0, 192, 192, 192, 0, 0, 0,
@@ -856,6 +955,104 @@ static const uint8_t font2[] = {
 0, 0, 0, 0, 0, 96, 226,158,12,0, 0, 0, 0, 0, 0, 0,
 120, 252, 204, 204, 204, 204, 252, 120, 0, 0, 0, 0, 0, 0, 0, 0
 };
+
+int drawChar1(TFT_t * dev, uint8_t sizew, uint8_t sizeht, int16_t x, int16_t y, unsigned char c, uint16_t color) {
+	c -= 32;
+static const uint8_t fstyle = 0;
+static const uint8_t width = 240;
+static const uint8_t height = 240;
+int fsw = 5; //iod09 font selection
+int fsh = 8; //iod09 font selection
+static uint16_t bg = BLACK;
+  int crad;
+  //int co;
+  //if (fstyle == 1 || fstyle == 2 || fstyle == 3) crad = sizew >> 1;
+  //if (fstyle == DOTMATRIXLED) co = crad * 68 / 100;
+  if (sizew > 3)crad --;
+  if (dev->_font_direction != 3 && dev->_font_direction != 2)
+  {
+    if ((x >= width) || (y >= height) || ((x + (fsw + 1) * sizew - 1) < 0) || ((y + fsh * sizeht - 1) < 0))
+    {
+      return;
+    }
+  }
+  for (int8_t i = 0; i < 6; i++ )
+  {
+    uint8_t tcol;
+    if (i == (fsw))
+    {
+      tcol = 0x0;
+    }
+    else
+    {
+      tcol = font1[(c * 5) + i];
+    }
+    for (int8_t j = 0; j < 8; j++)
+    {
+      if (i == 5) tcol = 0;
+      if (tcol & 0x1)
+      {
+        if (sizew == 1 && sizeht == 1)
+        {
+          if (y + j > 319 && (dev->_font_direction == 3 || dev->_font_direction == 2))
+          {
+            lcdDrawPixel(dev, x + i, y + j - 320, color);
+          }
+          else
+          {
+            lcdDrawPixel(dev, x + i, y + j, color);
+          }
+        }
+        else
+        {
+          if (fstyle == 0) lcdDrawFillRect(dev, x + (i * sizew), y + (j * sizeht), (sizew + x) + (i * sizew) - 1, (sizeht + y) + (j * sizeht) - 1, color);
+          /*
+		  if (fstyle == 2)Circle(x + (i * sizew) + crad, y + (j * sizeht) + crad, crad, color);
+          if (fstyle == 1)CircleFilled(x + (i * sizew) + crad, y + (j * sizeht) + crad, crad, color);
+          if (fstyle == 3)
+          {
+            CircleFilled(x + (i * sizew) + crad, y + (j * sizeht) + crad, crad, color);
+            CircleFilled(x + (i * sizew) + co, y + (j * sizeht) + co, crad / 3, WHITE);
+          }
+          if (fstyle == 4)RectangleFilled(x + (i * sizew), y + (j * sizeht), (sizew + x) + (i * sizew) - 2, (sizeht + y) + (j * sizeht) - 2, color);
+          if (fstyle == 5)
+          {
+            uint16_t fadcol = color;
+            fadcol = HighlightColors(fadcol, 10) & 0xffff;
+            int step = 60 / (sizew / 2);
+            if (step < 1) step = 1;
+            for (int n = sizew / 2; n > -1; n --)
+            {
+              Rectangle(x + (i * sizew) + n, y + (j * sizeht) + n, (sizew + x) + (i * sizew) - 1 - n, (sizeht + y) + (j * sizeht) - 1 - n, fadcol);
+              fadcol = HighlightColors(fadcol, step) >> 16;
+            }
+          }
+		  */
+        }
+      }
+      else if (bg != color)
+      {
+        if (sizew == 1 && sizeht == 1)
+        {
+          if (y + j > 319 && (dev->_font_direction == 3 || dev->_font_direction == 2))
+          {
+            lcdDrawPixel(dev, x + i, y + j - 320, bg);
+          }
+          else
+          {
+            lcdDrawPixel(dev, x + i, y + j, bg);
+          }
+        }
+        else
+        {
+          lcdDrawFillRect(dev, x + i * sizew, y + j * sizeht, (sizew + x) + i * sizew - 1, (sizeht + y) + j * sizeht - 1, bg);
+        }
+      }
+      tcol >>= 1;
+    }
+  }
+  return x+(sizew*6);
+}
 
 int drawChar2(TFT_t * dev, uint8_t sizeht , uint8_t sizew, int16_t x, int16_t y, unsigned char c, uint16_t color) {
 	c -= 32;
@@ -1086,6 +1283,7 @@ int lcdDrawString(TFT_t * dev, FontxFile *fx, uint16_t x, uint16_t y, uint8_t * 
 	return 0;
 }
 
+/* iod 09 large font */
 int lcdDrawString2(TFT_t * dev, uint8_t sizeht , uint8_t sizew, uint16_t x, uint16_t y, uint8_t * ascii, uint16_t color) {
 	int length = strlen((char *)ascii);
 	//printf("lcdDrawString length=%d\n",length);
@@ -1099,6 +1297,28 @@ int lcdDrawString2(TFT_t * dev, uint8_t sizeht , uint8_t sizew, uint16_t x, uint
 			x = drawChar2(dev, sizeht, sizew, x, y, ascii[i], color);
 		if (dev->_font_direction == 3)
 			y = drawChar2(dev, sizeht, sizew, x, y, ascii[i], color);
+	}
+	if (dev->_font_direction == 0) return x;
+	if (dev->_font_direction == 2) return x;
+	if (dev->_font_direction == 1) return y;
+	if (dev->_font_direction == 3) return y;
+	return 0;
+}
+
+/* iod 09 small font */
+int lcdDrawString3(TFT_t * dev, uint8_t sizeht , uint8_t sizew, uint16_t x, uint16_t y, uint8_t * ascii, uint16_t color) {
+	int length = strlen((char *)ascii);
+	//printf("lcdDrawString length=%d\n",length);
+	for(int i=0;i<length;i++) {
+		//printf("ascii[%d]=%x x=%d y=%d\n",i,ascii[i],x,y);
+		if (dev->_font_direction == 0)
+			x = drawChar1(dev, sizeht, sizew, x, y, ascii[i], color);
+		if (dev->_font_direction == 1)
+			y = drawChar1(dev, sizeht, sizew, x, y, ascii[i], color);
+		if (dev->_font_direction == 2)
+			x = drawChar1(dev, sizeht, sizew, x, y, ascii[i], color);
+		if (dev->_font_direction == 3)
+			y = drawChar1(dev, sizeht, sizew, x, y, ascii[i], color);
 	}
 	if (dev->_font_direction == 0) return x;
 	if (dev->_font_direction == 2) return x;
