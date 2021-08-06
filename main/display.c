@@ -6,6 +6,8 @@ extern long map(long x, long in_min, long in_max, long out_min, long out_max);
 static bool fault_indicator_displayed = false;
 static bool is_speed_visible = true;
 
+static const int8_t x_offset = -4; //TODO: offset used on Albert. the rest are unknown
+
 /**
  * Asymmetric sigmoidal approximation
  * https://www.desmos.com/calculator/oyhpsu8jnw
@@ -172,6 +174,7 @@ void resetPreviousValues()
 	speed_now_previous = -1;
 	joystick_value_mapped_previous = 0;
 	is_speed_visible = true;
+	remote_battery_previous = 0;
 }
 TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height, user_settings_t *user_settings) {
 	TickType_t startTick, endTick, diffTick;
@@ -409,7 +412,6 @@ void drawCircularGauge(TFT_t * dev, uint8_t x, uint8_t y, uint8_t radius, uint8_
 }
 
 TickType_t drawScreenRound(TFT_t * dev, FontxFile *fx, int width, int height, user_settings_t *user_settings) {
-	static const int8_t x_offset = -4;
 	TickType_t startTick, endTick, diffTick;
 	startTick = xTaskGetTickCount();
 
@@ -474,7 +476,7 @@ TickType_t drawScreenRound(TFT_t * dev, FontxFile *fx, int width, int height, us
 	{
 		JPEGTest(dev, (char*)"/spiffs/map_fault.jpg", 25, 25, x_offset + 107, 25);
 		fault_indicator_displayed = true;
-	} else if (fault_indicator_displayed) {
+	} else if (esc_telemetry.fault_code == 0 && fault_indicator_displayed) {
 		lcdDrawFillRect(dev, 97, 25, x_offset+107+25, 25+25, BLACK); // Clear fault indicator
 		fault_indicator_displayed = false;
 	}
@@ -546,7 +548,7 @@ TickType_t drawScreenRound(TFT_t * dev, FontxFile *fx, int width, int height, us
 			joystick_position = (joystick_value_mapped - 128) / 128.0;
 		} else if (joystick_value_mapped < 125)
 		{
-			joystick_position = joystick_value_mapped / 128.0;
+			joystick_position = 1.0 - (joystick_value_mapped / 128.0);
 		} else {
 			joystick_position = 0;
 		}
@@ -557,11 +559,39 @@ TickType_t drawScreenRound(TFT_t * dev, FontxFile *fx, int width, int height, us
 			drawCircularGauge(dev, x_offset + 120, 110, 85, 5, 0, 90, 100-(joystick_position * 100), BLACK, PURPLE);
 		}
 
+		// Odometer
+		// Do not update if less than 0.01km distance
+		if (fabs(esc_telemetry.tachometer_abs / 1000.0 - tachometer_abs_previous / 1000.0) > 0.01)
+		{
+			tachometer_abs_previous = esc_telemetry.tachometer_abs;
+			if (user_settings->display_mph) sprintf((char *)ascii, "%04.2fmi", esc_telemetry.tachometer_abs / 1000.0 * KTOM);
+			else sprintf((char *)ascii, "%04.2fkm", esc_telemetry.tachometer_abs / 1000.0);
+			/*
+			{
+				ypos = 165;
+				xpos = x_offset + (width - (strlen((char *)ascii) * fontWidth)) / 2;
+				lcdSetFontDirection(dev, DIRECTION0);
+			}
+			color = WHITE;
+			lcdDrawString(dev, fx, xpos, ypos, ascii, color);
+			*/
+			fontWidth = 2;
+			fontHeight = 2;
+			{
+				ypos = 145;
+				xpos = x_offset + (width - (strlen((char *)ascii) * 6 /*font1 multiplier*/ * fontWidth)) / 2;
+				lcdSetFontDirection(dev, DIRECTION0);
+			}
+			color = WHITE;
+			lcdDrawString3(dev, fontHeight, fontWidth, xpos, ypos, ascii, color);
+		}
+
 		// Voltage
 		// Only update if we've changed more than 0.1V (displayed)
 		if (fabs(esc_vin_previous - esc_telemetry.v_in) > 0.1)
 		{
 			esc_vin_previous = esc_telemetry.v_in;
+			/*
 			sprintf((char *)ascii, " %3.1fV ", esc_telemetry.v_in);
 			{
 				ypos = 190;
@@ -571,21 +601,17 @@ TickType_t drawScreenRound(TFT_t * dev, FontxFile *fx, int width, int height, us
 			color = WHITE;
 			lcdSetFontFill(dev, BLACK);
 			lcdDrawString(dev, fx, xpos, ypos, ascii, color);
-		}
-
-		// Odometer
-		if (fabs(esc_telemetry.tachometer_abs - tachometer_abs_previous) > 0.01)
-		{
-			tachometer_abs_previous = esc_telemetry.tachometer_abs;
-			if (user_settings->display_mph) sprintf((char *)ascii, "%02.2fmi", esc_telemetry.tachometer_abs / 1000.0 * KTOM);
-			else sprintf((char *)ascii, "%02.2fkm", esc_telemetry.tachometer_abs / 1000.0);
+			*/
+			fontWidth = 2;
+			fontHeight = 2;
+			sprintf((char *)ascii, " %3.1fV ", esc_telemetry.v_in);
 			{
-				ypos = 165;
-				xpos = x_offset + (width - (strlen((char *)ascii) * fontWidth)) / 2;
+				ypos = 170;
+				xpos = x_offset + (width - (strlen((char *)ascii) * 6 /*font1 multiplier*/ * fontWidth)) / 2;
 				lcdSetFontDirection(dev, DIRECTION0);
 			}
 			color = WHITE;
-			lcdDrawString(dev, fx, xpos, ypos, ascii, color);
+			lcdDrawString3(dev, fontHeight, fontWidth, xpos, ypos, ascii, color);
 		}
 
 		// Speed big numbers
@@ -790,17 +816,18 @@ TickType_t drawAlert(TFT_t * dev, FontxFile *fx, uint16_t p_color, char * title,
 
 
 	// Alert dialog border
-	lcdDrawFillRect(dev, 22, 42, 218, 198, BLACK);
-	lcdDrawRoundRect(dev, 22, 42, 218, 198, 6, p_color);
-	lcdDrawRoundRect(dev, 23, 43, 217, 197, 6, p_color);
-	lcdDrawRoundRect(dev, 24, 44, 216, 196, 6, p_color);
+	//TODO: border for new round displays
+	//lcdDrawFillRect(dev, 22, 42, 218, 198, BLACK);
+	//lcdDrawRoundRect(dev, 22, 42, 218, 198, 6, p_color);
+	//lcdDrawRoundRect(dev, 23, 43, 217, 197, 6, p_color);
+	//lcdDrawRoundRect(dev, 24, 44, 216, 196, 6, p_color);
 
 	fontWidth = 2;
 	fontHeight = 2;
 	lcdSetFontDirection(dev, DIRECTION0);
 	snprintf((char *)ascii, 15, title);
 	ypos = 55;
-	xpos = (width - (strlen((char *)ascii) * 8 * fontWidth)) / 2;
+	xpos = x_offset + (width - (strlen((char *)ascii) * 8 * fontWidth)) / 2;
 	color = YELLOW;
 	lcdDrawString2(dev, fontHeight, fontWidth, xpos, ypos, ascii, color);
 
@@ -808,12 +835,12 @@ TickType_t drawAlert(TFT_t * dev, FontxFile *fx, uint16_t p_color, char * title,
 	color = WHITE;
 	snprintf((char *)ascii, 15, "%s", line1);
 	ypos = 115;
-	xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
+	xpos = x_offset + (width - (strlen((char *)ascii) * fontWidth)) / 2;
 	lcdDrawString(dev, fx, xpos, ypos, ascii, color);
 
 	snprintf((char *)ascii, 15, "%s", line2);
 	ypos = 135;
-	xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
+	xpos = x_offset + (width - (strlen((char *)ascii) * fontWidth)) / 2;
 	lcdDrawString(dev, fx, xpos, ypos, ascii, color);
 
 	//lcdDrawFillRect(dev, 25, 135, 215, 190, BLACK);
@@ -821,12 +848,12 @@ TickType_t drawAlert(TFT_t * dev, FontxFile *fx, uint16_t p_color, char * title,
 	color = GRAY;
 	snprintf((char *)ascii, 15, "%s", line3);
 	ypos = 165;
-	xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
+	xpos = x_offset + (width - (strlen((char *)ascii) * fontWidth)) / 2;
 	lcdDrawString(dev, fx, xpos, ypos, ascii, color);
 
 	snprintf((char *)ascii, 15, "%s", line4);
 	ypos = 185;
-	xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
+	xpos = x_offset + (width - (strlen((char *)ascii) * fontWidth)) / 2;
 	lcdDrawString(dev, fx, xpos, ypos, ascii, color);
 
 	endTick = xTaskGetTickCount();
