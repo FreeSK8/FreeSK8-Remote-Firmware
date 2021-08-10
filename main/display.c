@@ -151,8 +151,8 @@ TickType_t drawScreenDeveloper(TFT_t * dev, FontxFile *fx, int width, int height
 //batt 538 = 3.308
 const int adc_raw_battery_minimum = 525; //TODO: estimated
 const int adc_raw_battery_maximum = 700; //TODO: estimated
-const int adc_raw_rssi_maximum = 1092;
-const int adc_raw_rssi_minimum = 850;
+const int adc_raw_rssi_maximum = 1092; // Maximum observed RSSI
+const int adc_raw_rssi_minimum = 519; // Lowest oberseved RSSI
 static uint8_t rssi_mapped_previous;
 static uint8_t batt_pixel_previous;
 static uint8_t gpio_usb_detect_previous;
