@@ -628,7 +628,7 @@ TickType_t drawScreenRound(TFT_t * dev, FontxFile *fx, int width, int height, us
 				fontWidth = 6;
 				fontHeight = 5;
 				speed_now_previous = speed_now;
-				sprintf((char *)ascii, "%02d", speed_now);
+				sprintf((char *)ascii, "%02d", abs(speed_now));
 				{
 					ypos = 60;
 					xpos = x_offset + (width - (strlen((char *)ascii) * 8 * fontWidth)) / 2;
