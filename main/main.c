@@ -690,10 +690,13 @@ static void xbee_task(void *arg)
 			// Pass XBEE CH, ID, MY, DL for transmission to receiver
 			if (example_espnow_init(remote_xbee_ch, remote_xbee_id, xbee_my_address, xbee_rx_address, NULL) == ESP_OK)
 			{
+				display_second_screen = false; //NOTE: Pairing button on boot will set display_second_screen true
+				display_blank_now = true;
 				sprintf(str_pairing_3, "Pairing was");
 				sprintf(str_pairing_4, "Successful");
 				melody_play(MELODY_BLE_SUCCESS, true);
 				haptic_play(MELODY_BLE_SUCCESS, true);
+				vTaskDelay(3000/portTICK_PERIOD_MS); // Wait a few seconds
 			}
 			else
 			{
@@ -705,8 +708,6 @@ static void xbee_task(void *arg)
 				vTaskDelay(10000/portTICK_PERIOD_MS);
 			}
 			display_blank_now = true;
-
-			vTaskDelay(10000/portTICK_PERIOD_MS);
 
 			printf("Exiting Pairing Mode\n");
 			// Pairing complete

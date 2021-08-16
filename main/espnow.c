@@ -158,7 +158,7 @@ void example_espnow_data_prepare(example_espnow_send_param_t *send_param)
 
     buf->crc = esp_crc16_le(UINT16_MAX, (uint8_t const *)buf, send_param->len);
 }
-
+static example_espnow_send_param_t *send_param;
 static esp_err_t example_espnow_task(void *pvParameter, configure_xbee_func p_configure_xbee)
 {
     example_espnow_event_t evt;
@@ -177,7 +177,7 @@ static esp_err_t example_espnow_task(void *pvParameter, configure_xbee_func p_co
     ESP_LOGI(TAG, "Start sending broadcast data");
 
     /* Start sending broadcast ESPNOW data. */
-    example_espnow_send_param_t *send_param = (example_espnow_send_param_t *)pvParameter;
+    send_param = (example_espnow_send_param_t *)pvParameter;
     if (esp_now_send(send_param->dest_mac, send_param->buffer, send_param->len) != ESP_OK) {
         ESP_LOGE(TAG, "Send error");
         example_espnow_deinit(send_param);
@@ -205,14 +205,12 @@ static esp_err_t example_espnow_task(void *pvParameter, configure_xbee_func p_co
                 }
 #if ESPNOW_RECEIVER
                 if (send_param->state > PAIRING_STATE_READY) {
-                    ESP_LOGW(TAG, "Nothing to send because send_param->state is > 3 (ready)");
-                    break;
+                    ESP_LOGW(TAG, "send_param->state is > 3 (ready)");
                 }
 #else
                 /* Remote will wait for state to be READY */
                 if (recv_state == PAIRING_STATE_CONNECTED) {
-                    ESP_LOGI(TAG, "Nothing to send because we are waiting for ready from the receiver");
-                    break;
+                    ESP_LOGI(TAG, "Waiting for ready from the receiver");
                 }
 #endif
                 /* Delay a while before sending the next data. */
@@ -288,6 +286,8 @@ static esp_err_t example_espnow_task(void *pvParameter, configure_xbee_func p_co
                         ESP_LOGW(TAG, "hey renee recv state %d has no handler, mystate %d", recv_state, send_param->state);
                         /* Change state back to init because the other side isn't ready */
                         send_param->state = PAIRING_STATE_INIT;
+                        send_param->broadcast = true;
+                        send_param->unicast = false;
                     }
 #endif
                 }
@@ -353,8 +353,8 @@ static esp_err_t example_espnow_task(void *pvParameter, configure_xbee_func p_co
                             example_espnow_deinit(send_param);
                             return ESP_FAIL;
                         }
-                        vTaskDelay(5000/portTICK_RATE_MS); //TODO: wait? for buffer to clear???
-                        example_espnow_deinit(send_param);
+                        vTaskDelay(1000/portTICK_RATE_MS); //NOTE: Waiting for send receive queue
+                        example_espnow_cancel();
                         return ESP_OK;
                     }
                     else if (recv_state == PAIRING_STATE_FAILED) {
@@ -465,9 +465,6 @@ static void example_espnow_deinit(example_espnow_send_param_t *send_param)
 
 void example_espnow_cancel()
 {
-    //TODO: How do we properly clean up without crashing/instability
-    //esp_now_unregister_recv_cb();
-    //esp_now_unregister_send_cb();
-    //vSemaphoreDelete(s_example_espnow_queue);
-    esp_now_deinit();
+    // Exhaust all ESPNOW send attempts to cancel pairing
+    if(send_param) send_param->count = 1;
 }
