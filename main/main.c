@@ -977,15 +977,13 @@ void ST7789_Task(void *pvParameters)
 			}
 			else if (is_throttle_locked && !alert_visible)
 			{
-				// Display throttle locked alert over drawScreenPrimary
+				// Display throttle locked alert over primary screen
 				drawAlert(&dev, fx24G, RED, "Throttle", "locked", "", "Double click", "to unlock");
-				if (my_user_settings.remote_model == MODEL_ALBERT) drawScreenRound(&dev, fx24G, CONFIG_WIDTH, CONFIG_HEIGHT, &my_user_settings);
-				else drawScreenPrimary(&dev, fx24G, CONFIG_WIDTH, CONFIG_HEIGHT, &my_user_settings);
+				drawScreenRound(&dev, fx24G, CONFIG_WIDTH, CONFIG_HEIGHT, &my_user_settings);
 			}
 			else
 			{
-				if (my_user_settings.remote_model == MODEL_ALBERT) drawScreenRound(&dev, fx24G, CONFIG_WIDTH, CONFIG_HEIGHT, &my_user_settings);
-				else drawScreenPrimary(&dev, fx24G, CONFIG_WIDTH, CONFIG_HEIGHT, &my_user_settings);
+				drawScreenRound(&dev, fx24G, CONFIG_WIDTH, CONFIG_HEIGHT, &my_user_settings);
 			}
 		}
 
