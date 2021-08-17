@@ -181,7 +181,7 @@ static esp_err_t example_espnow_task(void *pvParameter, configure_xbee_func p_co
     if (esp_now_send(send_param->dest_mac, send_param->buffer, send_param->len) != ESP_OK) {
         ESP_LOGE(TAG, "Send error");
         example_espnow_deinit(send_param);
-        vTaskDelete(NULL);
+        return ESP_FAIL;
     }
 
     while (xQueueReceive(s_example_espnow_queue, &evt, portMAX_DELAY) == pdTRUE) {
