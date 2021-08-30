@@ -483,7 +483,10 @@ TickType_t drawScreenRound(TFT_t * dev, FontxFile *fx, int width, int height, us
 
 
 	//RSSI
-	uint8_t rssi_mapped = map(adc_raw_rssi, adc_raw_rssi_minimum, adc_raw_rssi_maximum, 1, 10);
+	static uint16_t adc_raw_rssi_avg = 0; // Clean up the display value
+	adc_raw_rssi_avg = (uint16_t)(0.1 * adc_raw_rssi) + (uint16_t)(0.9 * adc_raw_rssi_avg);
+
+	uint8_t rssi_mapped = map(adc_raw_rssi_avg, adc_raw_rssi_minimum, adc_raw_rssi_maximum, 1, 10);
 	if (rssi_mapped != rssi_mapped_previous)
 	{
 		drawCircularGauge(dev, x_offset+120, 110, 100, 5, 10, 70, 100-/*invert*/(rssi_mapped*10), BLACK, GREEN);
