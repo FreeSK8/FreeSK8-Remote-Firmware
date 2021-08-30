@@ -240,6 +240,9 @@ static void gpio_input_task(void* arg)
 					continue;
 				}
 
+				// No action desired when throttle is locked
+				if (is_throttle_locked) continue;
+
 				// Clear alert or change display
 				if (alert_visible) alert_clear = true;
 				else
@@ -620,6 +623,10 @@ static void xbee_task(void *arg)
 
 		if (remote_in_pairing_mode)
 		{
+			//NOTE: Must execute after nvs_flash_init
+			example_wifi_init(); // Enable WiFi for pairing mode
+			xbee_init(); // Generate unique XBee ID & CH
+			// Generate random XBee MY & DL
 			uint16_t xbee_my_address = esp_random() % 0xFFFF;
 			uint16_t xbee_rx_address = esp_random() % 0xFFFF;
 			ESP_LOGI(__FUNCTION__,"Entering Pairing Mode");
@@ -712,6 +719,9 @@ static void xbee_task(void *arg)
 			printf("Exiting Pairing Mode\n");
 			// Pairing complete
 			remote_in_pairing_mode = false;
+
+			// Turn off wifi to save power after pairing
+			ESP_ERROR_CHECK(esp_wifi_stop());
 		}
 		else
 		{
@@ -862,7 +872,7 @@ void ST7789_Task(void *pvParameters)
 		JPEGTest(&dev, (char*)"/spiffs/logo_badge.jpg", 206, 114, 17, 63);
 	}
 
-	vTaskDelay(3000/portTICK_PERIOD_MS);
+	vTaskDelay(1000/portTICK_PERIOD_MS);
 	lcdFillScreen(&dev, BLACK);
 
 	bool is_display_visible = true;
@@ -1060,10 +1070,6 @@ void app_main(void)
         ret = nvs_flash_init();
     }
     ESP_ERROR_CHECK( ret );
-
-	//TODO: from espnow example, execute after nvs_flash_init
-	example_wifi_init(); // TODO: Only needed for pairing mode
-	xbee_init(); // TODO: Only needed for pairing mode, requires wifi_init
 
 /* ESPNOW/Wifi */
 
