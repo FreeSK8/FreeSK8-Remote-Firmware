@@ -58,7 +58,7 @@ static bool button_up(debounce_t *d) {
 
 #define LONG_PRESS_DURATION (2000)
 #define LONG_PRESS_REPEAT (1000)
-#define DOUBLE_PRESS_TIMEOUT (250)
+#define DOUBLE_PRESS_TIMEOUT (350)
 
 static uint32_t millis() {
     return esp_timer_get_time() / 1000;
