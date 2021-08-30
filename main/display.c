@@ -150,9 +150,10 @@ TickType_t drawScreenDeveloper(TFT_t * dev, FontxFile *fx, int width, int height
 //batt 622 = 3.775
 //batt 538 = 3.308
 const int adc_raw_battery_minimum = 525; //TODO: estimated
-const int adc_raw_battery_maximum = 700; //TODO: estimated
+const int adc_raw_battery_maximum = 720; // Battery at full charge
 const int adc_raw_rssi_maximum = 1092; // Maximum observed RSSI
 const int adc_raw_rssi_minimum = 519; // Lowest oberseved RSSI
+static uint16_t adc_raw_rssi_avg = 0; // Average displayed RSSI value
 static uint8_t rssi_mapped_previous;
 static uint8_t batt_pixel_previous;
 static uint8_t gpio_usb_detect_previous;
@@ -227,7 +228,7 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height, 
 	//FAULT
 	if (esc_telemetry.fault_code != 0)
 	{
-		JPEGTest(dev, (char*)"/spiffs/map_fault.jpg", 25, 25, 107, 0);
+		drawJPEG(dev, (char*)"/spiffs/map_fault.jpg", 25, 25, 107, 0);
 	}
 
 
@@ -474,7 +475,7 @@ TickType_t drawScreenRound(TFT_t * dev, FontxFile *fx, int width, int height, us
 	//FAULT
 	if (esc_telemetry.fault_code != 0 && !fault_indicator_displayed)
 	{
-		JPEGTest(dev, (char*)"/spiffs/map_fault.jpg", 25, 25, x_offset + 107, 25);
+		drawJPEG(dev, (char*)"/spiffs/map_fault.jpg", 25, 25, x_offset + 107, 25);
 		fault_indicator_displayed = true;
 	} else if (esc_telemetry.fault_code == 0 && fault_indicator_displayed) {
 		lcdDrawFillRect(dev, 97, 25, x_offset+107+25, 25+25, BLACK); // Clear fault indicator
@@ -483,7 +484,6 @@ TickType_t drawScreenRound(TFT_t * dev, FontxFile *fx, int width, int height, us
 
 
 	//RSSI
-	static uint16_t adc_raw_rssi_avg = 0; // Clean up the display value
 	adc_raw_rssi_avg = (uint16_t)(0.1 * adc_raw_rssi) + (uint16_t)(0.9 * adc_raw_rssi_avg);
 
 	uint8_t rssi_mapped = map(adc_raw_rssi_avg, adc_raw_rssi_minimum, adc_raw_rssi_maximum, 1, 10);
@@ -669,13 +669,19 @@ TickType_t drawScreenRound(TFT_t * dev, FontxFile *fx, int width, int height, us
 	return diffTick;
 }
 
-TickType_t JPEGTest(TFT_t * dev, char * file, int width, int height, int offset_x, int offset_y) {
+void drawFirmwareVersion(TFT_t * dev, char * version)
+{
+	// Draw firmware version
+	uint8_t fontWidth = 2;
+	uint8_t fontHeight = 2;
+	uint8_t ypos = 200;
+	uint8_t xpos = x_offset + (240 /*display width*/ - (strlen(version) * 6 /*font1 multiplier*/ * fontWidth)) / 2;
+	lcdDrawString3(dev, fontHeight, fontWidth, xpos, ypos, (uint8_t *)version, WHITE);
+}
+
+TickType_t drawJPEG(TFT_t * dev, char * file, int width, int height, int offset_x, int offset_y) {
 	TickType_t startTick, endTick, diffTick;
 	startTick = xTaskGetTickCount();
-
-	//lcdSetFontDirection(dev, 0);
-	//lcdFillScreen(dev, BLACK);
-
 
 	pixel_s **pixels;
 	uint16_t imageWidth;
@@ -701,17 +707,6 @@ TickType_t JPEGTest(TFT_t * dev, char * file, int width, int height, int offset_
 		//ESP_LOGD(__FUNCTION__, "_height=%d _rows=%d", _height, _rows);
 		uint16_t *colors = (uint16_t*)malloc(sizeof(uint16_t) * _width);
 
-#if 0
-		for(int y = 0; y < _height; y++){
-			for(int x = 0;x < _width; x++){
-				pixel_s pixel = pixels[y][x];
-				uint16_t color = rgb565_conv(pixel.red, pixel.green, pixel.blue);
-				lcdDrawPixel(dev, x+_cols, y+_rows, color);
-			}
-			vTaskDelay(1);
-		}
-#endif
-
 		for(int y = 0; y < _height; y++){
 			for(int x = 0;x < _width; x++){
 				pixel_s pixel = pixels[y][x];
@@ -723,7 +718,7 @@ TickType_t JPEGTest(TFT_t * dev, char * file, int width, int height, int offset_
 
 		free(colors);
 		release_image(&pixels, width, height);
-		ESP_LOGD(__FUNCTION__, "Finish");
+		//ESP_LOGD(__FUNCTION__, "Finish");
 	}
 
 	endTick = xTaskGetTickCount();
