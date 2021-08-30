@@ -23,6 +23,8 @@
 
 #include "lib/haptic/haptic.h"
 
+const char * version = "0.1.0";
+
 int gyro_x, gyro_y, gyro_z;
 float accel_g_x, accel_g_x_delta;
 float accel_g_y, accel_g_y_delta;
@@ -824,18 +826,6 @@ static void SPIFFS_Directory(char * path) {
 	closedir(dir);
 }
 
-// You have to set these CONFIG value using menuconfig.
-#if 0
-#define CONFIG_WIDTH  240
-#define CONFIG_HEIGHT 240
-#define CONFIG_MOSI_GPIO 23
-#define CONFIG_SCLK_GPIO 18
-#define CONFIG_CS_GPIO -1
-#define CONFIG_DC_GPIO 19
-#define CONFIG_RESET_GPIO 15
-#define CONFIG_BL_GPIO -1
-#endif
-
 void ST7789_Task(void *pvParameters)
 {
 	// set font file
@@ -866,10 +856,11 @@ void ST7789_Task(void *pvParameters)
 
 	// FreeSK8 Logo
 	lcdFillScreen(&dev, BLACK);
+	drawFirmwareVersion(&dev, (char *)version);
 	if (remote_in_pairing_mode) {
-		JPEGTest(&dev, (char*)"/spiffs/logo_badge_pairing.jpg", 206, 179, 17, 63);
+		drawJPEG(&dev, (char*)"/spiffs/logo_badge_pairing.jpg", 206, 179, 17, 63);
 	} else {
-		JPEGTest(&dev, (char*)"/spiffs/logo_badge.jpg", 206, 114, 17, 63);
+		drawJPEG(&dev, (char*)"/spiffs/logo_badge.jpg", 206, 114, 17, 63);
 	}
 
 	vTaskDelay(1000/portTICK_PERIOD_MS);
