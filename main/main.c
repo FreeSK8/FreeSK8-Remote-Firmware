@@ -478,7 +478,12 @@ void process_packet_vesc(unsigned char *data, unsigned int len) {
 
 		if (esc_telemetry.fault_code != FAULT_CODE_NONE) {
 			esc_telemetry_last_fault = esc_telemetry;
-			if (!alert_visible) alert_show = true;
+			if (!alert_visible)
+			{
+				alert_show = true;
+				display_blank_now = true;
+				display_second_screen = false;
+			}
 			melody_play(MELODY_ESC_FAULT, false);
 			haptic_play(MELODY_ESC_FAULT, false);
 		}
@@ -974,17 +979,17 @@ void ST7789_Task(void *pvParameters)
 			// Draw primary or secondary display
 			if (display_second_screen && !alert_visible)
 			{
-				drawScreenDeveloper(&dev, fx24M, CONFIG_WIDTH, CONFIG_HEIGHT);
+				drawScreenSecondary(&dev, fx24G, CONFIG_WIDTH, CONFIG_HEIGHT, &my_user_settings);
 			}
 			else if (is_throttle_locked && !alert_visible)
 			{
 				// Display throttle locked alert over primary screen
 				drawAlert(&dev, fx24G, RED, "Throttle", "locked", "", "Double click", "to unlock");
-				drawScreenRound(&dev, fx24G, CONFIG_WIDTH, CONFIG_HEIGHT, &my_user_settings);
+				drawScreenPrimary(&dev, fx24G, CONFIG_WIDTH, CONFIG_HEIGHT, &my_user_settings);
 			}
 			else
 			{
-				drawScreenRound(&dev, fx24G, CONFIG_WIDTH, CONFIG_HEIGHT, &my_user_settings);
+				drawScreenPrimary(&dev, fx24G, CONFIG_WIDTH, CONFIG_HEIGHT, &my_user_settings);
 			}
 		}
 
