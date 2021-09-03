@@ -154,7 +154,7 @@ const int adc_raw_battery_maximum = 720; // Battery at full charge
 const int adc_raw_rssi_maximum = 1092; // Maximum observed RSSI
 const int adc_raw_rssi_minimum = 519; // Lowest oberseved RSSI
 static uint16_t adc_raw_rssi_avg = 0; // Average displayed RSSI value
-static uint8_t rssi_mapped_previous;
+static double rssi_log_previous;
 static uint8_t batt_pixel_previous;
 static uint8_t gpio_usb_detect_previous;
 static int tachometer_abs_previous = -1000;
@@ -168,7 +168,7 @@ static double temp_motor_previous = -1;
 void resetPreviousValues()
 {
 	tachometer_abs_previous = -1000;
-	rssi_mapped_previous = 0;
+	rssi_log_previous = 0;
 	batt_pixel_previous = 0;
 	gpio_usb_detect_previous = 0;
 	esc_vin_previous = 0;
@@ -673,10 +673,14 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height, 
 	//RSSI
 	adc_raw_rssi_avg = (uint16_t)(0.1 * adc_raw_rssi) + (uint16_t)(0.9 * adc_raw_rssi_avg);
 
-	uint8_t rssi_mapped = map(adc_raw_rssi_avg, adc_raw_rssi_minimum, adc_raw_rssi_maximum, 1, 10);
-	if (rssi_mapped != rssi_mapped_previous)
+	uint8_t rssi_mapped = map(adc_raw_rssi_avg, adc_raw_rssi_minimum, adc_raw_rssi_maximum, 10, 100);
+	double rssi_log = log10(rssi_mapped) - 1.0; // Results in 0.0 to 1.0
+	// Only update if value changes more than 10%
+	if (fabs(rssi_log - rssi_log_previous) > 0.1)
 	{
-		drawCircularGauge(dev, x_offset+120, 110, 100, 5, 10, 70, 100-/*invert*/(rssi_mapped*10), BLACK, GREEN);
+		rssi_log_previous = rssi_log;
+		if (rssi_log < 0.1) rssi_log = 0.1; // rssi_log is minimum 10% to show 1 dot on the LCD
+		drawCircularGauge(dev, x_offset+120, 110, 100, 5, 10, 70, 100-/*invert*/(rssi_log*100), BLACK, GREEN);
 	}
 
 
@@ -744,10 +748,14 @@ TickType_t drawScreenSecondary(TFT_t * dev, FontxFile *fx, int width, int height
 	//RSSI
 	adc_raw_rssi_avg = (uint16_t)(0.1 * adc_raw_rssi) + (uint16_t)(0.9 * adc_raw_rssi_avg);
 
-	uint8_t rssi_mapped = map(adc_raw_rssi_avg, adc_raw_rssi_minimum, adc_raw_rssi_maximum, 1, 10);
-	if (rssi_mapped != rssi_mapped_previous)
+	uint8_t rssi_mapped = map(adc_raw_rssi_avg, adc_raw_rssi_minimum, adc_raw_rssi_maximum, 10, 100);
+	double rssi_log = log10(rssi_mapped) - 1.0; // Results in 0.0 to 1.0
+	// Only update if value changes more than 10%
+	if (fabs(rssi_log - rssi_log_previous) > 0.1)
 	{
-		drawCircularGauge(dev, x_offset+120, 110, 100, 5, 10, 70, 100-/*invert*/(rssi_mapped*10), BLACK, GREEN);
+		rssi_log_previous = rssi_log;
+		if (rssi_log < 0.1) rssi_log = 0.1; // rssi_log is minimum 10% to show 1 dot on the LCD
+		drawCircularGauge(dev, x_offset+120, 110, 100, 5, 10, 70, 100-/*invert*/(rssi_log*100), BLACK, GREEN);
 	}
 
 	// Temps
