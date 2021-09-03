@@ -764,82 +764,124 @@ TickType_t drawScreenSecondary(TFT_t * dev, FontxFile *fx, int width, int height
 
 	// ESC Temp
 	//TODO: Only update when needed - track previous value
-	if (user_settings->dispaly_fahrenheit) {
-		esc_temp_mapped = map(CTOF(esc_telemetry.temp_mos), 25, 100, 1, 20);
-		display_temperature = CTOF(esc_telemetry.temp_mos);
-	} else {
-		esc_temp_mapped = map(esc_telemetry.temp_mos, 25, 100, 1, 20);
-		display_temperature = esc_telemetry.temp_mos;
-	}
-	if (display_temperature < 0) display_temperature = 0;
-
-	drawCircularGaugeSmall(dev, x_offset+80, 75, 30, 4, 200, 160, /*100-invert*/(esc_temp_mapped*5), RED, GREEN);
-	fontWidth = 2;
-	fontHeight = 2;
-	sprintf((char *)ascii, "%03.0f", display_temperature);
 	{
-		ypos = 67;
-		xpos = x_offset + -40 + (width - (strlen((char *)ascii) * 6 /*font1 multiplier*/ * fontWidth)) / 2;
-		lcdSetFontDirection(dev, DIRECTION0);
+		if (user_settings->dispaly_fahrenheit) {
+			esc_temp_mapped = map(CTOF(esc_telemetry.temp_mos), 25, 100, 1, 20);
+			display_temperature = CTOF(esc_telemetry.temp_mos);
+		} else {
+			esc_temp_mapped = map(esc_telemetry.temp_mos, 25, 100, 1, 20);
+			display_temperature = esc_telemetry.temp_mos;
+		}
+		if (display_temperature < 0) display_temperature = 0;
+
+		ypos = 115;
+		drawCircularGaugeSmall(dev, x_offset+80, ypos, 30, 4, 200, 160, /*100-invert*/(esc_temp_mapped*5), RED, GREEN);
+		fontWidth = 2;
+		fontHeight = 2;
+		sprintf((char *)ascii, "%03.0f", display_temperature);
+		{
+			ypos -= 8;
+			xpos = x_offset + -40 + (width - (strlen((char *)ascii) * 6 /*font1 multiplier*/ * fontWidth)) / 2;
+			lcdSetFontDirection(dev, DIRECTION0);
+		}
+		color = WHITE;
+		lcdDrawString3(dev, fontHeight, fontWidth, xpos, ypos, ascii, color);
+		lcdDrawString3(dev, 1, 1, x_offset+80, ypos + 30, (uint8_t *)"E", color);
 	}
-	color = WHITE;
-	lcdDrawString3(dev, fontHeight, fontWidth, xpos, ypos, ascii, color);
-	lcdDrawString3(dev, 1, 1, x_offset+80, ypos + 30, (uint8_t *)"E", color);
 
 	// Motor Temp
 	//TODO: Only update when needed - track previous value
-	if (user_settings->dispaly_fahrenheit) {
-		motor_temp_mapped = map(CTOF(esc_telemetry.temp_motor), 25, 100, 1, 20);
-		display_temperature = CTOF(esc_telemetry.temp_motor);
-	} else {
-		motor_temp_mapped = map(esc_telemetry.temp_motor, 25, 100, 1, 20);
-		display_temperature = esc_telemetry.temp_motor;
-	}
-	if (display_temperature < 0) display_temperature = 0;
-
-	drawCircularGaugeSmall(dev, x_offset+160, 75, 30, 4, 200, 160, /*100-invert*/(motor_temp_mapped*5), RED, GREEN);
-	fontWidth = 2;
-	fontHeight = 2;
-	sprintf((char *)ascii, "%03.0f", display_temperature);
 	{
-		ypos = 67;
-		xpos = x_offset + 40 + (width - (strlen((char *)ascii) * 6 /*font1 multiplier*/ * fontWidth)) / 2;
-		lcdSetFontDirection(dev, DIRECTION0);
+		if (user_settings->dispaly_fahrenheit) {
+			motor_temp_mapped = map(CTOF(esc_telemetry.temp_motor), 25, 100, 1, 20);
+			display_temperature = CTOF(esc_telemetry.temp_motor);
+		} else {
+			motor_temp_mapped = map(esc_telemetry.temp_motor, 25, 100, 1, 20);
+			display_temperature = esc_telemetry.temp_motor;
+		}
+		if (display_temperature < 0) display_temperature = 0;
+
+		ypos = 115;
+		drawCircularGaugeSmall(dev, x_offset+160, ypos, 30, 4, 200, 160, /*100-invert*/(motor_temp_mapped*5), RED, GREEN);
+		fontWidth = 2;
+		fontHeight = 2;
+		sprintf((char *)ascii, "%03.0f", display_temperature);
+		{
+			ypos -= 8;
+			xpos = x_offset + 40 + (width - (strlen((char *)ascii) * 6 /*font1 multiplier*/ * fontWidth)) / 2;
+			lcdSetFontDirection(dev, DIRECTION0);
+		}
+		color = WHITE;
+		lcdDrawString3(dev, fontHeight, fontWidth, xpos, ypos, ascii, color);
+		lcdDrawString3(dev, 1, 1, x_offset+160, ypos + 30, (uint8_t *)"M", color);
 	}
-	color = WHITE;
-	lcdDrawString3(dev, fontHeight, fontWidth, xpos, ypos, ascii, color);
-	lcdDrawString3(dev, 1, 1, x_offset+160, ypos + 30, (uint8_t *)"M", color);
 
 	// Uptime
 	//sprintf((char *)ascii, "%d", xTaskGetTickCount() * portTICK_PERIOD_MS / 1000);
 	//xpos = x_offset + (width - (strlen((char *)ascii) * 6 /*font1 multiplier*/ * 1/*fontWidth*/)) / 2;
 	//lcdDrawString3(dev, 1, 1, xpos, 110, ascii, color);
 
-	// Efficiency
+	// Efficiency and Range
 	static double efficiency = 0;
-	if (esc_telemetry.tachometer_abs != tachometer_abs_previous)
+	static double range = 0;
+	// Do not update if less than 0.01km distance
+	if (fabs(esc_telemetry.tachometer_abs / 1000.0 - tachometer_abs_previous / 1000.0) > 0.01)
 	{
-		tachometer_abs_previous = esc_telemetry.tachometer_abs;
-		if (user_settings->display_mph) efficiency = (esc_telemetry.watt_hours - esc_telemetry.watt_hours_charged) / (esc_telemetry.tachometer_abs / 1000.0 * KTOM);
-		else efficiency = (esc_telemetry.watt_hours - esc_telemetry.watt_hours_charged) / (esc_telemetry.tachometer_abs / 1000.0);
-		if (isnan(efficiency)) efficiency = 0;
-		//TODO: Do we need a minimum distance? esc_telemetry.tachometer_abs / 1000.0 < 0.01
-
-		fontWidth = 2;
-		fontHeight = 2;
-		sprintf((char *)ascii, "%03.1f", efficiency);
+		// Efficiency
 		{
-			ypos = 120;
-			xpos = x_offset + (width - (strlen((char *)ascii) * 8 * fontWidth)) / 2;
-			lcdSetFontDirection(dev, DIRECTION0);
-		}
-		lcdDrawString2(dev, fontHeight, fontWidth, xpos, ypos, ascii, YELLOW);
+			tachometer_abs_previous = esc_telemetry.tachometer_abs;
+			if (user_settings->display_mph) efficiency = (esc_telemetry.watt_hours - esc_telemetry.watt_hours_charged) / (esc_telemetry.tachometer_abs / 1000.0 * KTOM);
+			else efficiency = (esc_telemetry.watt_hours - esc_telemetry.watt_hours_charged) / (esc_telemetry.tachometer_abs / 1000.0);
+			if (isnan(efficiency)) efficiency = 0;
+			efficiency += 10;
+			//TODO: Do we need a minimum distance? esc_telemetry.tachometer_abs / 1000.0 < 0.01
 
-		if (user_settings->display_mph) sprintf((char *)ascii, "wh/mi");
-		else sprintf((char *)ascii, "wh/km");
-		ypos = 155;
-		xpos = x_offset + (width - (strlen((char *)ascii) * 8 * fontWidth)) / 2;
-		lcdDrawString2(dev, fontHeight, fontWidth, xpos, ypos, ascii, WHITE);
+			fontWidth = 2;
+			fontHeight = 2;
+			sprintf((char *)ascii, " %03.1f ", efficiency);
+			{
+				ypos = 35;
+				xpos = x_offset + (width - (strlen((char*)ascii) * 8 * fontWidth)) / 2;
+			}
+			lcdDrawString2(dev, fontHeight, fontWidth, xpos, ypos, ascii, YELLOW);
+
+			//TODO: draw once
+			if (user_settings->display_mph) sprintf((char *)ascii, "wh/mi");
+			else sprintf((char *)ascii, "wh/km");
+			fontWidth = 1;
+			fontHeight = 1;
+			{
+				ypos += 30;
+				xpos = x_offset + (width - (strlen((char*)ascii) * 8 * fontWidth)) / 2;
+			}
+			lcdDrawString2(dev, fontWidth, fontHeight, xpos, ypos, ascii, WHITE);
+		}
+
+		// Range
+		{
+			range = (esc_telemetry.battery_wh * esc_telemetry.battery_level) / efficiency;
+			if (isnan(range)) range = 0;
+
+			fontWidth = 2;
+			fontHeight = 2;
+			sprintf((char *)ascii, " %03.1f ", range);
+			{
+				ypos = 150;
+				xpos = x_offset + (width - (strlen((char*)ascii) * 8 * fontWidth)) / 2;
+			}
+			lcdDrawString2(dev, fontHeight, fontWidth, xpos, ypos, ascii, YELLOW);
+
+			//TODO: draw once
+			fontWidth = 1;
+			fontHeight = 1;
+			if (user_settings->display_mph) sprintf((char *)ascii, "mi");
+			else sprintf((char *)ascii, "km");
+			{
+				ypos += 30;
+				xpos = x_offset + (width - (strlen((char*)ascii) * 8 * fontWidth)) / 2;
+			}
+			lcdDrawString2(dev, 1, 1, xpos, ypos, ascii, WHITE);
+		}
 	}
 
 	// Vehicle Battery
@@ -936,9 +978,9 @@ TickType_t drawScreenPairing(TFT_t * dev, FontxFile *fx, int width, int height) 
 
 	// Pairing dialog
 	//lcdDrawFillRect(dev, 22, 42, 218, 198, BLACK);
-	lcdDrawRoundRect(dev, 22, 42, 218, 198, 6, GREEN);
-	lcdDrawRoundRect(dev, 23, 43, 217, 197, 6, GREEN);
-	lcdDrawRoundRect(dev, 24, 44, 216, 196, 6, GREEN);
+	//lcdDrawRoundRect(dev, 22, 42, 218, 198, 6, GREEN);
+	//lcdDrawRoundRect(dev, 23, 43, 217, 197, 6, GREEN);
+	//lcdDrawRoundRect(dev, 24, 44, 216, 196, 6, GREEN);
 
 	fontWidth = 2;
 	fontHeight = 2;
