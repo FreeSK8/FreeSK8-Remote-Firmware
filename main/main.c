@@ -872,7 +872,7 @@ void ST7789_Task(void *pvParameters)
 	lcdFillScreen(&dev, BLACK);
 
 	bool is_display_visible = true;
-	uint8_t idle_delay = 0;
+	TickType_t remote_is_idle_tick = xTaskGetTickCount();
 	while(1) {
 		// Check for setup mode
 		if (remote_in_setup_mode)
@@ -916,18 +916,19 @@ void ST7789_Task(void *pvParameters)
 			const int gyro_threshold = 1000; //TODO: define threshold
 			if (abs(gyro_x) > gyro_threshold || abs(gyro_y) > gyro_threshold || abs(gyro_z) > gyro_threshold)
 			{
-				idle_delay = 0;
+				remote_is_idle_tick = xTaskGetTickCount();
+				// Check if we were idle and reset the display values
 				if (is_remote_idle) {
 					printf("remote is moving %d, %d, %d\n", gyro_x, gyro_y, gyro_z);
 					resetPreviousValues();
 				}
 				is_remote_idle = false;
 			}
-			else if (++idle_delay > 65)
+			// Check if Gyro has been idle for more than 10 seconds
+			else if ((xTaskGetTickCount() - remote_is_idle_tick)*portTICK_RATE_MS > 10 * 1000)
 			{
-				idle_delay = 0;
 				is_remote_idle = true;
-				printf("remote is idle %d, %d, %d\n", gyro_x, gyro_y, gyro_z);
+				//NOTE: helpful sometimes.. printf("remote is idle %d, %d, %d\n", gyro_x, gyro_y, gyro_z);
 			}
 			// Check if remote is in a visible orientation
 			switch (my_user_settings.remote_model)
