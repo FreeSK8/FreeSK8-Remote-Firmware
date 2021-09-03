@@ -157,15 +157,17 @@ static uint16_t adc_raw_rssi_avg = 0; // Average displayed RSSI value
 static uint8_t rssi_mapped_previous;
 static uint8_t batt_pixel_previous;
 static uint8_t gpio_usb_detect_previous;
-static int tachometer_abs_previous = 0;
+static int tachometer_abs_previous = -1000;
 static double esc_vin_previous = 0;
 static double esc_battery_previous = 0;
 static int speed_now_previous = -1;
 static uint8_t remote_battery_previous = 0;
 static uint8_t joystick_value_mapped_previous = 0;
+static double temp_mos_previous = -1;
+static double temp_motor_previous = -1;
 void resetPreviousValues()
 {
-	tachometer_abs_previous = -1;
+	tachometer_abs_previous = -1000;
 	rssi_mapped_previous = 0;
 	batt_pixel_previous = 0;
 	gpio_usb_detect_previous = 0;
@@ -176,6 +178,8 @@ void resetPreviousValues()
 	joystick_value_mapped_previous = 0;
 	was_esc_responding = false;
 	remote_battery_previous = 0;
+	temp_mos_previous = -1;
+	temp_motor_previous = -1;
 }
 
 TickType_t drawScreenSquare(TFT_t * dev, FontxFile *fx, int width, int height, user_settings_t *user_settings) {
@@ -737,17 +741,6 @@ TickType_t drawScreenSecondary(TFT_t * dev, FontxFile *fx, int width, int height
 	}
 
 
-	//FAULT
-	if (esc_telemetry.fault_code != 0 && !fault_indicator_displayed)
-	{
-		drawJPEG(dev, (char*)"/spiffs/map_fault.jpg", 25, 25, x_offset + 107, 25);
-		fault_indicator_displayed = true;
-	} else if (esc_telemetry.fault_code == 0 && fault_indicator_displayed) {
-		lcdDrawFillRect(dev, 97, 25, x_offset+107+25, 25+25, BLACK); // Clear fault indicator
-		fault_indicator_displayed = false;
-	}
-
-
 	//RSSI
 	adc_raw_rssi_avg = (uint16_t)(0.1 * adc_raw_rssi) + (uint16_t)(0.9 * adc_raw_rssi_avg);
 
@@ -763,8 +756,9 @@ TickType_t drawScreenSecondary(TFT_t * dev, FontxFile *fx, int width, int height
 	static double display_temperature;
 
 	// ESC Temp
-	//TODO: Only update when needed - track previous value
+	if (fabs(esc_telemetry.temp_mos - temp_mos_previous) > 0.5)
 	{
+		temp_mos_previous = esc_telemetry.temp_mos;
 		if (user_settings->dispaly_fahrenheit) {
 			esc_temp_mapped = map(CTOF(esc_telemetry.temp_mos), 25, 100, 1, 20);
 			display_temperature = CTOF(esc_telemetry.temp_mos);
@@ -790,8 +784,9 @@ TickType_t drawScreenSecondary(TFT_t * dev, FontxFile *fx, int width, int height
 	}
 
 	// Motor Temp
-	//TODO: Only update when needed - track previous value
+	if (fabs(esc_telemetry.temp_motor - temp_motor_previous) > 0.5)
 	{
+		temp_motor_previous = esc_telemetry.temp_motor;
 		if (user_settings->dispaly_fahrenheit) {
 			motor_temp_mapped = map(CTOF(esc_telemetry.temp_motor), 25, 100, 1, 20);
 			display_temperature = CTOF(esc_telemetry.temp_motor);
