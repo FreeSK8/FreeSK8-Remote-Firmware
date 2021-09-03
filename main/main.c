@@ -415,9 +415,9 @@ static void i2c_task(void *arg)
 		accel_g_x_delta = accel_g_x - accel_gx;
 		accel_g_y_delta = accel_g_y - accel_gy;
 		accel_g_z_delta = accel_g_z - accel_gz;
-		accel_g_x = (0.6 * accel_gx) + (0.4 * accel_g_x);
-		accel_g_y = (0.6 * accel_gy) + (0.4 * accel_g_y);
-		accel_g_z = (0.6 * accel_gz) + (0.4 * accel_g_z);
+		accel_g_x = (0.2 * accel_gx) + (0.8 * accel_g_x);
+		accel_g_y = (0.2 * accel_gy) + (0.8 * accel_g_y);
+		accel_g_z = (0.2 * accel_gz) + (0.8 * accel_g_z);
 
 		gyro_x = gyro.gyro_x;
 		gyro_y = gyro.gyro_y;
@@ -873,6 +873,7 @@ void ST7789_Task(void *pvParameters)
 
 	bool is_display_visible = true;
 	TickType_t remote_is_idle_tick = xTaskGetTickCount();
+	TickType_t remote_is_visible_tick = xTaskGetTickCount();
 	while(1) {
 		// Check for setup mode
 		if (remote_in_setup_mode)
@@ -935,18 +936,38 @@ void ST7789_Task(void *pvParameters)
 			{
 				//TODO: left vs right handed values: my_user_settings.throttle_reverse ?
 				case MODEL_ALBERT:
-					//TODO: estimated
-					if (accel_g_x > 0.7 || accel_g_z > 0.4) is_display_visible = false;
-					else is_display_visible = true;
+					if (accel_g_x > 0.7 || accel_g_z > 0.4) {
+						if ((xTaskGetTickCount() - remote_is_visible_tick)*portTICK_RATE_MS > 500) {
+							is_display_visible = false;
+						}
+					}
+					else {
+						remote_is_visible_tick = xTaskGetTickCount();
+						is_display_visible = true;
+					}
 				break;
 				case MODEL_BRUCE:
-					if (accel_g_y > 0.5 || accel_g_z > 0.3) is_display_visible = false;
-					else is_display_visible = true;
+					if (accel_g_y > 0.5 || accel_g_z > 0.3) {
+						if ((xTaskGetTickCount() - remote_is_visible_tick)*portTICK_RATE_MS > 500) {
+							is_display_visible = false;
+						}
+					}
+					else {
+						remote_is_visible_tick = xTaskGetTickCount();
+						is_display_visible = true;
+					}
 				break;
 				case MODEL_CLINT:
 					//TODO: estimated
-					if (accel_g_y > 0.5 || accel_g_x > 0.6) is_display_visible = false;
-					else is_display_visible = true;
+					if (accel_g_y > 0.5 || accel_g_x > 0.6) {
+						if ((xTaskGetTickCount() - remote_is_visible_tick)*portTICK_RATE_MS > 500) {
+							is_display_visible = false;
+						}
+					}
+					else {
+						remote_is_visible_tick = xTaskGetTickCount();
+						is_display_visible = true;
+					}
 				break;
 			}
 		}
