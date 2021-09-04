@@ -17,6 +17,14 @@
 
 #include "lib/vesc/datatypes.h"
 
+#include "user-settings.h"
+
+extern bool remote_in_pairing_mode;
+extern char str_pairing_1[15];
+extern char str_pairing_2[15];
+extern char str_pairing_3[15];
+extern char str_pairing_4[15];
+
 extern uint16_t adc_raw_joystick;
 extern uint16_t adc_raw_joystick_2;
 extern uint16_t adc_raw_battery_level;
@@ -30,8 +38,27 @@ extern int gpio_switch_detect;
 extern int gpio_usb_detect;
 
 extern TELEMETRY_DATA esc_telemetry;
+extern TELEMETRY_DATA esc_telemetry_last_fault;
 
-TickType_t ArrowTest(TFT_t * dev, FontxFile *fx, int width, int height);
-TickType_t JPEGTest(TFT_t * dev, char * file, int width, int height);
+extern TickType_t esc_last_responded;
+
+volatile bool alert_show; // Is it time to display an alert
+volatile bool alert_visible; // Has alert been displayed
+volatile bool alert_clear; // Has alert been cleared by user input
+
+
+TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height, user_settings_t *user_settings);
+TickType_t drawScreenSecondary(TFT_t * dev, FontxFile *fx, int width, int height, user_settings_t *user_settings);
+TickType_t drawScreenDeveloper(TFT_t * dev, FontxFile *fx, int width, int height);
+
+TickType_t drawScreenPairing(TFT_t * dev, FontxFile *fx, int width, int height);
+TickType_t drawSetupMenu(TFT_t * dev, FontxFile *fx, user_settings_t *user_settings, uint8_t current_index);
+
+TickType_t drawAlert(TFT_t * dev, FontxFile *fx, uint16_t p_color, char * title, char * line1, char * line2, char * line3, char * line4);
+TickType_t drawJPEG(TFT_t * dev, char * file, int width, int height, int offset_x, int offset_y);
+
+void drawFirmwareVersion(TFT_t * dev, char * version);
+
+void resetPreviousValues();
 
 #endif

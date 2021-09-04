@@ -1,6 +1,8 @@
 set(srcs "main.c"
     "display.c"
     "esp-i2c.c"
+    "espnow.c"
+    "user-settings.c"
     "lib/st7789/st7789.c"
     "lib/st7789/fontx.c"
     "lib/st7789/pngle.c"
@@ -8,10 +10,13 @@ set(srcs "main.c"
     "lib/MPU6050/mpu6050.c"
     "lib/vesc/crc.c"
     "lib/vesc/buffer.c"
+    "lib/vesc/datatypes.c"
     "lib/vesc/packet.c"
     "lib/ADS1015/src/ADS1015.c"
     "lib/melody/melody.c"
     "lib/melody/melody_notes.c"
+    "lib/esp32-button/src/button.c"
+    "lib/haptic/haptic.c"
     )
 
 # Only ESP32 has enough memory to do jpeg decoding
@@ -20,7 +25,7 @@ if(IDF_TARGET STREQUAL "esp32")
 endif()
 
 idf_component_register(SRCS ${srcs}
-                    INCLUDE_DIRS ".;./lib/st7789;./lib/MPU6050;./lib/vesc;./lib/ADS1015/src;./lib/melody")
+                    INCLUDE_DIRS ".;./lib/st7789;./lib/MPU6050;./lib/vesc;./lib/ADS1015/src;./lib/melody;./lib/esp32-button/include;./lib/haptic;")
 
 
 # Create a SPIFFS image from the contents of the 'font' directory

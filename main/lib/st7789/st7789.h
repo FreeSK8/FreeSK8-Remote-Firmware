@@ -77,5 +77,14 @@ void lcdBacklightOff(TFT_t * dev);
 void lcdBacklightOn(TFT_t * dev);
 void lcdInversionOff(TFT_t * dev);
 void lcdInversionOn(TFT_t * dev);
+
+void lcdFillTriangle(TFT_t * dev, int16_t x0, int16_t y0, int16_t x1, int16_t y1, int16_t x2, int16_t y2, uint16_t color);
+void lcdFillArc(TFT_t * dev, int x, int y, int start_angle, int seg_count, int rx, int ry, int w, uint16_t color);
+void lcdFillArc2(TFT_t * dev, int x, int y, int start_angle, int seg_count, int rx, int ry, int w, uint16_t color);
+void lcdFillArc3(TFT_t * dev, int x, int y, int start_angle, int seg_count, int rx, int ry, int w, uint16_t color, uint8_t segments);
+
+int lcdDrawString2(TFT_t * dev, uint8_t sizeht , uint8_t sizew, uint16_t x, uint16_t y, uint8_t * ascii, uint16_t color);
+int lcdDrawString3(TFT_t * dev, uint8_t sizeht , uint8_t sizew, uint16_t x, uint16_t y, uint8_t * ascii, uint16_t color);
+
 #endif /* MAIN_ST7789_H_ */
 
