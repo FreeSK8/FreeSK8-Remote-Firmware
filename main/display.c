@@ -621,7 +621,6 @@ TickType_t drawScreenSecondary(TFT_t * dev, FontxFile *fx, int width, int height
 			if (user_settings->display_mph) efficiency = (esc_telemetry.watt_hours - esc_telemetry.watt_hours_charged) / (esc_telemetry.tachometer_abs / 1000.0 * KTOM);
 			else efficiency = (esc_telemetry.watt_hours - esc_telemetry.watt_hours_charged) / (esc_telemetry.tachometer_abs / 1000.0);
 			if (isnan(efficiency)) efficiency = 0;
-			efficiency += 10;
 			//TODO: Do we need a minimum distance? esc_telemetry.tachometer_abs / 1000.0 < 0.01
 
 			fontWidth = 2;
