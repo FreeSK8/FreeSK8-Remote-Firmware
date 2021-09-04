@@ -23,7 +23,7 @@
 
 #include "lib/haptic/haptic.h"
 
-const char * version = "0.1.0";
+const char * version = "0.1.1";
 
 int gyro_x, gyro_y, gyro_z;
 float accel_g_x, accel_g_x_delta;
