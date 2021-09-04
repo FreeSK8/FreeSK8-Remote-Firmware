@@ -3,13 +3,13 @@
 #include "driver/i2c.h"
 #include "esp_system.h"
 #include "esp-i2c.h"
+#include "esp_log.h"
 
+#define ESP_INTR_FLAG_DEFAULT 0
 
 void IRAM_ATTR ads1015_gpio_isr_handler(void* arg)
 {
-    //DO something
-    //ADS1015 *adc = (ADS1015*) (arg);
-    //assert(adc);
+    // ADC Conversion is ready to be read
     xSemaphoreGiveFromISR(_semaphore, NULL);
 }
 
@@ -52,16 +52,17 @@ void ADS1015_init()
     The ALERT/RDY pin can also be configured as a conversion ready pin. Set the most-significant bit of the
     Hi_thresh register to 1 and the most-significant bit of Lo_thresh register to 0 to enable the pin as a conversion
     ready pin.
-    
-
-    writeRegister(_address, ADS1015_REG_POINTER_HITHRESH, 0x8000);
-    writeRegister(_address, ADS1015_REG_POINTER_LOWTHRESH, 0x7FFF);
+    */
+    ADS1015_writeRegister(_address, ADS1015_REG_POINTER_HITHRESH, 0x8000);
+    ADS1015_writeRegister(_address, ADS1015_REG_POINTER_LOWTHRESH, 0x7FFF);
 
     _semaphore = xSemaphoreCreateCounting(1,0);
-    
-    gpio_isr_handler_add((gpio_num_t)PIN_NUM_ADC_READY, ads1015_gpio_isr_handler, this);
-    */
+
+    //install gpio isr service
+    gpio_install_isr_service(ESP_INTR_FLAG_DEFAULT);
+    gpio_isr_handler_add((gpio_num_t)PIN_NUM_ADC_READY, ads1015_gpio_isr_handler, NULL);
 }
+
 
 uint16_t ADS1015_readADC_SingleEnded(uint8_t channel)
 {
@@ -76,7 +77,7 @@ uint16_t ADS1015_readADC_SingleEnded(uint8_t channel)
                     
 
     // Set PGA/voltage range
-    config |= (uint16_t) GAIN_ONE; //GAIN = 1;
+    config |= (uint16_t) GAIN_TWOTHIRDS;
 
     // Set single-ended input channel
     switch (channel)
@@ -104,9 +105,11 @@ uint16_t ADS1015_readADC_SingleEnded(uint8_t channel)
 
     //Will wait for fallling edge
     // Wait for the conversion to complete, read ready signal
-    //if (xSemaphoreTake(_semaphore, 1000 / portTICK_RATE_MS) != pdTRUE)
-    //    printf("ERROR ADS1015::readADC_SingleEnded : could not wait for adc semaphore after interrupt.\n");
-    vTaskDelay(ADS1015_CONVERSIONDELAY/portTICK_PERIOD_MS);
+    if (xSemaphoreTake(_semaphore, ADS1015_CONVERSIONDELAY / portTICK_RATE_MS) != pdTRUE)
+    {
+        ESP_LOGE(__FUNCTION__, "ERROR ADS1015::readADC_SingleEnded : could not wait for adc semaphore after interrupt.\n");
+        return ADS1015_ERROR;
+    }
 
     // Read the conversion results
     // Shift 12-bit results right 4 bits for the ADS1015

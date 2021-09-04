@@ -21,14 +21,24 @@
 #define DMA_CHAN    LCD_HOST
 #endif
 
+#define DEG2RAD 0.0174532925
+#ifndef _swap_int16_t
+#define _swap_int16_t(a, b)                                                    \
+  {                                                                            \
+    int16_t t = a;                                                             \
+    a = b;                                                                     \
+    b = t;                                                                     \
+  }
+#endif
+
 //static const int GPIO_MOSI = 23;
 //static const int GPIO_SCLK = 18;
 
 static const int SPI_Command_Mode = 0;
 static const int SPI_Data_Mode = 1;
-static const int SPI_Frequency = SPI_MASTER_FREQ_20M;
+//static const int SPI_Frequency = SPI_MASTER_FREQ_20M;
 //static const int SPI_Frequency = SPI_MASTER_FREQ_26M;
-//static const int SPI_Frequency = SPI_MASTER_FREQ_40M;
+static const int SPI_Frequency = SPI_MASTER_FREQ_40M;
 //static const int SPI_Frequency = SPI_MASTER_FREQ_80M;
 
 
@@ -294,10 +304,10 @@ void lcdDrawMultiPixels(TFT_t * dev, uint16_t x, uint16_t y, uint16_t size, uint
 // y2:End Y coordinate
 // color:color
 void lcdDrawFillRect(TFT_t * dev, uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2, uint16_t color) {
-	if (x1 >= dev->_width) return;
-	if (x2 >= dev->_width) x2=dev->_width-1;
-	if (y1 >= dev->_height) return;
-	if (y2 >= dev->_height) y2=dev->_height-1;
+	//if (x1 >= dev->_width) return;
+	//if (x2 >= dev->_width) x2=dev->_width-1;
+	//if (y1 >= dev->_height) return;
+	//if (y2 >= dev->_height) y2=dev->_height-1;
 
 	ESP_LOGD(TAG,"offset(x)=%d offset(y)=%d",dev->_offsetx,dev->_offsety);
 	uint16_t _x1 = x1 + dev->_offsetx;
@@ -475,6 +485,99 @@ void lcdDrawTriangle(TFT_t * dev, uint16_t xc, uint16_t yc, uint16_t w, uint16_t
 	lcdDrawLine(dev, x1, y1, x2, y2, color);
 	lcdDrawLine(dev, x1, y1, x3, y3, color);
 	lcdDrawLine(dev, x2, y2, x3, y3, color);
+}
+
+/**************************************************************************/
+/*!
+   @brief     Draw a triangle with color-fill
+    @param    x0  Vertex #0 x coordinate
+    @param    y0  Vertex #0 y coordinate
+    @param    x1  Vertex #1 x coordinate
+    @param    y1  Vertex #1 y coordinate
+    @param    x2  Vertex #2 x coordinate
+    @param    y2  Vertex #2 y coordinate
+    @param    color 16-bit 5-6-5 Color to fill/draw with
+*/
+/**************************************************************************/
+void lcdFillTriangle(TFT_t * dev, int16_t x0, int16_t y0, int16_t x1, int16_t y1, int16_t x2, int16_t y2, uint16_t color)
+{
+	int16_t a, b, y, last;
+
+	// Sort coordinates by Y order (y2 >= y1 >= y0)
+	if (y0 > y1) {
+		_swap_int16_t(y0, y1);
+		_swap_int16_t(x0, x1);
+	}
+	if (y1 > y2) {
+		_swap_int16_t(y2, y1);
+		_swap_int16_t(x2, x1);
+	}
+	if (y0 > y1) {
+		_swap_int16_t(y0, y1);
+		_swap_int16_t(x0, x1);
+	}
+
+	if (y0 == y2) { // Handle awkward all-on-same-line case as its own thing
+		a = b = x0;
+		if (x1 < a)
+			a = x1;
+		else if (x1 > b)
+			b = x1;
+		if (x2 < a)
+			a = x2;
+		else if (x2 > b)
+			b = x2;
+
+		lcdDrawLine(dev, a, y0, a + (b - a + 1) - 1, y0, color);
+		return;
+	}
+
+	int16_t dx01 = x1 - x0, dy01 = y1 - y0, dx02 = x2 - x0, dy02 = y2 - y0,
+	dx12 = x2 - x1, dy12 = y2 - y1;
+	int32_t sa = 0, sb = 0;
+
+	// For upper part of triangle, find scanline crossings for segments
+	// 0-1 and 0-2.  If y1=y2 (flat-bottomed triangle), the scanline y1
+	// is included here (and second loop will be skipped, avoiding a /0
+	// error there), otherwise scanline y1 is skipped here and handled
+	// in the second loop...which also avoids a /0 error here if y0=y1
+	// (flat-topped triangle).
+	if (y1 == y2)
+		last = y1; // Include y1 scanline
+	else
+		last = y1 - 1; // Skip it
+
+	for (y = y0; y <= last; y++) {
+		a = x0 + sa / dy01;
+		b = x0 + sb / dy02;
+		sa += dx01;
+		sb += dx02;
+		/* longhand:
+		a = x0 + (x1 - x0) * (y - y0) / (y1 - y0);
+		b = x0 + (x2 - x0) * (y - y0) / (y2 - y0);
+		*/
+		if (a > b)
+			_swap_int16_t(a, b);
+		lcdDrawLine(dev, a, y, a + (b - a + 1) - 1, y, color);
+	}
+
+	// For lower part of triangle, find scanline crossings for segments
+	// 0-2 and 1-2.  This loop is skipped if y1=y2.
+	sa = (int32_t)dx12 * (y - y1);
+	sb = (int32_t)dx02 * (y - y0);
+	for (; y <= y2; y++) {
+		a = x1 + sa / dy12;
+		b = x0 + sb / dy02;
+		sa += dx12;
+		sb += dx02;
+		/* longhand:
+		a = x1 + (x2 - x1) * (y - y1) / (y2 - y1);
+		b = x0 + (x2 - x0) * (y - y0) / (y2 - y0);
+		*/
+		if (a > b)
+			_swap_int16_t(a, b);
+		lcdDrawLine(dev, a, y, a + (b - a + 1) - 1, y, color);
+	}
 }
 
 // Draw circle
@@ -655,6 +758,376 @@ uint16_t rgb565_conv(uint16_t r,uint16_t g,uint16_t b) {
 	return (((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3));
 }
 
+static const uint8_t font1[] = {
+  0x00, 0x00, 0x00, 0x00, 0x00,      // Code for char
+  0x00, 0x06, 0x5F, 0x06, 0x00,      // Code for char !
+  0x07, 0x03, 0x00, 0x07, 0x03,      // Code for char "
+  0x24, 0x7E, 0x24, 0x7E, 0x24,      // Code for char #
+  0x24, 0x2B, 0x6A, 0x12, 0x00,      // Code for char $
+  0x63, 0x13, 0x08, 0x64, 0x63,      // Code for char %
+  0x36, 0x49, 0x56, 0x20, 0x50,      // Code for char &
+  0x00, 0x07, 0x03, 0x00, 0x00,      // Code for char '
+  0x00, 0x3E, 0x41, 0x00, 0x00,      // Code for char (
+  0x00, 0x41, 0x3E, 0x00, 0x00,      // Code for char )
+  0x08, 0x3E, 0x1C, 0x3E, 0x08,      // Code for char *
+  0x08, 0x08, 0x3E, 0x08, 0x08,      // Code for char +
+  0x00, 0xE0, 0x60, 0x00, 0x00,      // Code for char ,
+  0x08, 0x08, 0x08, 0x08, 0x08,      // Code for char -
+  0x00, 0x60, 0x60, 0x00, 0x00,      // Code for char .
+  0x20, 0x10, 0x08, 0x04, 0x02,      // Code for char /
+  0x3E, 0x51, 0x49, 0x45, 0x3E,      // Code for char 0
+  0x00, 0x42, 0x7F, 0x40, 0x00,      // Code for char 1
+  0x62, 0x51, 0x49, 0x49, 0x46,      // Code for char 2
+  0x22, 0x49, 0x49, 0x49, 0x36,      // Code for char 3
+  0x18, 0x14, 0x12, 0x7F, 0x10,      // Code for char 4
+  0x2F, 0x49, 0x49, 0x49, 0x31,      // Code for char 5
+  0x3C, 0x4A, 0x49, 0x49, 0x30,      // Code for char 6
+  0x01, 0x71, 0x09, 0x05, 0x03,      // Code for char 7
+  0x36, 0x49, 0x49, 0x49, 0x36,      // Code for char 8
+  0x06, 0x49, 0x49, 0x29, 0x1E,      // Code for char 9
+  0x00, 0x6C, 0x6C, 0x00, 0x00,      // Code for char :
+  0x00, 0xEC, 0x6C, 0x00, 0x00,      // Code for char ;
+  0x08, 0x14, 0x22, 0x41, 0x00,      // Code for char <
+  0x24, 0x24, 0x24, 0x24, 0x24,      // Code for char =
+  0x00, 0x41, 0x22, 0x14, 0x08,      // Code for char >
+  0x02, 0x01, 0x59, 0x09, 0x06,      // Code for char ?
+  0x3E, 0x41, 0x5D, 0x55, 0x1E,      // Code for char @
+  0x7E, 0x11, 0x11, 0x11, 0x7E,      // Code for char A
+  0x7F, 0x49, 0x49, 0x49, 0x36,      // Code for char B
+  0x3E, 0x41, 0x41, 0x41, 0x22,      // Code for char C
+  0x7F, 0x41, 0x41, 0x41, 0x3E,      // Code for char D
+  0x7F, 0x49, 0x49, 0x49, 0x41,      // Code for char E
+  0x7F, 0x09, 0x09, 0x09, 0x01,      // Code for char F
+  0x3E, 0x41, 0x49, 0x49, 0x7A,      // Code for char G
+  0x7F, 0x08, 0x08, 0x08, 0x7F,      // Code for char H
+  0x00, 0x41, 0x7F, 0x41, 0x00,      // Code for char I
+  0x30, 0x40, 0x40, 0x40, 0x3F,      // Code for char J
+  0x7F, 0x08, 0x14, 0x22, 0x41,      // Code for char K
+  0x7F, 0x40, 0x40, 0x40, 0x40,      // Code for char L
+  0x7F, 0x02, 0x04, 0x02, 0x7F,      // Code for char M
+  0x7F, 0x02, 0x04, 0x08, 0x7F,      // Code for char N
+  0x3E, 0x41, 0x41, 0x41, 0x3E,      // Code for char O
+  0x7F, 0x09, 0x09, 0x09, 0x06,      // Code for char P
+  0x3E, 0x41, 0x51, 0x21, 0x5E,      // Code for char Q
+  0x7F, 0x09, 0x09, 0x19, 0x66,      // Code for char R
+  0x26, 0x49, 0x49, 0x49, 0x32,      // Code for char S
+  0x01, 0x01, 0x7F, 0x01, 0x01,      // Code for char T
+  0x3F, 0x40, 0x40, 0x40, 0x3F,      // Code for char U
+  0x1F, 0x20, 0x40, 0x20, 0x1F,      // Code for char V
+  0x3F, 0x40, 0x3C, 0x40, 0x3F,      // Code for char W
+  0x63, 0x14, 0x08, 0x14, 0x63,      // Code for char X
+  0x07, 0x08, 0x70, 0x08, 0x07,      // Code for char Y
+  0x71, 0x49, 0x45, 0x43, 0x00,      // Code for char Z
+  0x00, 0x7F, 0x41, 0x41, 0x00,      // Code for char [
+  0x02, 0x04, 0x08, 0x10, 0x20,      // Code for <BackSlash>
+  0x00, 0x41, 0x41, 0x7F, 0x00,      // Code for char ]
+  0x04, 0x02, 0x01, 0x02, 0x04,      // Code for char ^
+  0x80, 0x80, 0x80, 0x80, 0x80,      // Code for char _
+  0x00, 0x03, 0x07, 0x00, 0x00,      // Code for char `
+  0x20, 0x54, 0x54, 0x54, 0x78,      // Code for char a
+  0x7F, 0x44, 0x44, 0x44, 0x38,      // Code for char b
+  0x38, 0x44, 0x44, 0x44, 0x28,      // Code for char c
+  0x38, 0x44, 0x44, 0x44, 0x7F,      // Code for char d
+  0x38, 0x54, 0x54, 0x54, 0x08,      // Code for char e
+  0x08, 0x7E, 0x09, 0x09, 0x00,      // Code for char f
+  0x18, 0xA4, 0xA4, 0xA4, 0x7C,      // Code for char g
+  0x7F, 0x04, 0x04, 0x78, 0x00,      // Code for char h
+  0x00, 0x00, 0x7D, 0x40, 0x00,      // Code for char i
+  0x40, 0x80, 0x84, 0x7D, 0x00,      // Code for char j
+  0x7F, 0x10, 0x28, 0x44, 0x00,      // Code for char k
+  0x00, 0x00, 0x7F, 0x40, 0x00,      // Code for char l
+  0x7C, 0x04, 0x18, 0x04, 0x78,      // Code for char m
+  0x7C, 0x04, 0x04, 0x78, 0x00,      // Code for char n
+  0x38, 0x44, 0x44, 0x44, 0x38,      // Code for char o
+  0xFC, 0x44, 0x44, 0x44, 0x38,      // Code for char p
+  0x38, 0x44, 0x44, 0x44, 0xFC,      // Code for char q
+  0x44, 0x78, 0x44, 0x04, 0x08,      // Code for char r
+  0x08, 0x54, 0x54, 0x54, 0x20,      // Code for char s
+  0x04, 0x3E, 0x44, 0x24, 0x00,      // Code for char t
+  0x3C, 0x40, 0x20, 0x7C, 0x00,      // Code for char u
+  0x1C, 0x20, 0x40, 0x20, 0x1C,      // Code for char v
+  0x3C, 0x60, 0x30, 0x60, 0x3C,      // Code for char w
+  0x6C, 0x10, 0x10, 0x6C, 0x00,      // Code for char x
+  0x9C, 0xA0, 0x60, 0x3C, 0x00,      // Code for char y
+  0x64, 0x54, 0x54, 0x4C, 0x00,      // Code for char z
+  0x08, 0x3E, 0x41, 0x41, 0x00,      // Code for char {
+  0x00, 0x00, 0x77, 0x00, 0x00,      // Code for char |
+  0x00, 0x41, 0x41, 0x3E, 0x08,      // Code for char }
+  0x02, 0x01, 0x02, 0x01, 0x00,      // Code for char ~
+  0x06, 0x09, 0x09, 0x06, 0x00       // Code for <Degrees>
+};
+
+static const uint8_t font2[] = {
+0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+192, 192, 192, 192, 192, 192, 192, 192, 192, 0, 192, 192, 192, 0, 0, 0,
+216, 216, 144, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+108, 108, 108, 108, 254, 254, 108, 254, 254, 108, 108, 108, 108, 0, 0, 0,
+24, 24, 124, 254, 210, 248, 124, 22, 150, 254, 124, 24, 24, 0, 0, 0,
+0, 198, 198, 12, 12, 24, 24, 48, 48, 96, 96, 198, 198, 0, 0, 0,
+56, 124, 108, 124, 56, 120, 108, 205, 197, 198, 206, 125, 125, 0, 0, 0,
+0, 192, 192, 128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+48, 48, 96, 96, 192, 192, 192, 192, 192, 192, 96, 96, 48, 48, 0, 0,
+192, 192, 96, 96, 48, 48, 48, 48, 48, 48, 96, 96, 192, 192, 0, 0,
+0, 0, 198, 198, 108, 56, 254, 254, 56, 108, 198, 198, 0, 0, 0, 0,
+0, 0, 48 ,48, 48, 48, 252, 252, 48, 48, 48, 48, 0, 0, 0, 0,
+0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 224, 224, 96, 192, 128, 0,
+0, 0, 0, 0, 0, 0, 248, 248, 0, 0, 0, 0, 0, 0, 0, 0,
+0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 224, 224, 224, 0, 0, 0, 0,
+0, 0, 6, 6, 12, 12, 24, 24, 48, 48, 96, 96, 192, 192, 0, 0,
+124, 254, 198, 198, 206, 206, 222, 246, 230, 230, 198, 254, 124, 0, 0, 0,
+48, 112, 112, 48, 48, 48, 48, 48, 48, 48, 48, 252, 252, 0, 0, 0,
+124, 254, 198, 6, 6, 62, 124, 224, 192, 192, 192, 254, 254, 0, 0, 0,
+124, 254, 198, 6, 6, 30, 28, 6, 6, 6, 198, 254, 124, 0, 0, 0,
+12, 28, 28, 60, 108, 108, 204, 204, 254, 254, 12, 12, 12, 0, 0, 0,
+252, 252, 192, 192, 192, 248, 252, 14, 6, 6, 198, 254, 124, 0, 0, 0,
+124, 254, 198, 192, 192, 248, 252, 206, 198, 198, 230, 254, 124, 0, 0, 0,
+254, 254, 198, 12, 12, 24, 24, 48, 48, 48, 48, 48, 48, 0, 0, 0,
+124, 254, 198, 198, 198, 254, 124, 198, 198, 198, 198, 254, 124, 0, 0, 0,
+124, 254, 198, 198, 198, 254, 126, 6, 6, 6, 6, 254, 124, 0, 0, 0,
+0, 0, 0, 192, 192, 0, 0, 0, 192, 192, 0, 0, 0, 0, 0, 0,
+0, 0, 0, 96, 96, 0, 0, 0, 96, 96, 192, 128, 0, 0, 0, 0,
+24, 24, 48, 48, 96, 96, 192, 192, 96, 96, 48, 48, 24, 24, 0, 0,
+0, 0, 0, 0, 248, 248, 0, 0, 248, 248, 0, 0, 0, 0, 0, 0,
+192, 192, 96, 96, 48, 48, 24, 24, 48, 48, 96, 96, 192, 192, 0, 0,
+124, 254, 198, 6, 14, 28, 56, 48, 48, 0, 0, 48, 48, 0, 0, 0,
+0, 0, 0, 0, 28, 34, 78, 82, 82, 82, 78, 32, 31, 0, 0, 0, 
+16, 56, 108, 108, 198, 198, 254, 254, 198, 198, 198, 198, 198, 0, 0, 0,
+252, 254, 198, 198, 198, 254, 252, 198, 198, 198, 198, 254, 252, 0, 0, 0,
+124, 254, 198, 192, 192, 192, 192, 192, 192, 192, 198, 254, 124, 0, 0, 0,
+248, 252, 206, 198, 198, 198, 198, 198, 198, 198, 206, 252, 248, 0, 0, 0,
+254, 254, 192, 192, 192, 248, 248, 192, 192, 192, 192, 254, 254, 0, 0, 0,
+254, 254, 192, 192, 192, 248, 248, 192, 192, 192, 192, 192, 192, 0, 0, 0,
+56, 124, 230, 192, 192, 192, 222, 222, 198, 198, 238, 124, 56, 0, 0, 0,
+198, 198, 198, 198, 198, 254, 254, 198, 198, 198, 198, 198, 198, 0, 0, 0,
+48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 0, 0, 0,
+6, 6, 6, 6, 6, 6, 6, 6, 6, 198, 238, 124, 56, 0, 0, 0,
+198, 198, 204, 204, 216, 248, 240, 216, 216, 204, 204, 198, 198, 0, 0, 0,
+192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 254, 254, 0, 0, 0,
+195, 231, 231, 255, 255, 255, 219, 219, 219, 219, 219, 195, 195, 0, 0, 0,
+198, 198, 230, 230, 230, 246, 246, 222, 222, 206, 206, 198, 198, 0, 0, 0,
+56, 124, 238, 198, 198, 198, 198, 198, 198, 198, 238, 124, 56, 0, 0, 0,
+248, 252, 206, 198, 206, 252, 248, 192, 192, 192, 192, 192, 192, 0, 0, 0,
+56, 124, 238, 198, 198, 198, 198, 198, 214, 222, 204, 126, 58, 0, 0, 0,
+248, 252, 206, 198, 206, 252, 248, 216, 216, 204, 204, 198, 198, 0, 0, 0,
+60, 126, 230, 192, 224, 120, 60, 14, 6, 6, 206, 252, 120, 0, 0, 0,
+252, 252, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 0, 0, 0,
+198, 198, 198, 198, 198, 198, 198, 198, 198, 198, 198, 254, 124, 0, 0, 0,
+198, 198, 198, 198, 198, 198, 198, 108, 108, 56, 56, 16, 16, 0, 0, 0,
+195, 219, 219, 219, 219, 219, 255, 255, 255, 231, 231, 195, 195, 0, 0, 0,
+198, 198, 108, 108, 56, 56, 16, 56, 56, 108, 108, 198, 198, 0, 0, 0,
+204, 204, 204, 204, 120, 120, 48, 48, 48, 48, 48, 48, 48, 0, 0, 0,
+254, 254, 12, 24, 24, 48, 48, 96, 96, 192, 192, 254, 254, 0, 0, 0,
+240, 240, 192, 192, 192, 192, 192, 192, 192, 192, 192, 240, 240, 0, 0, 0,
+128, 192, 192, 96, 32, 48, 16, 24, 8, 12, 4, 6, 2, 0, 0, 0,
+240, 240, 48, 48, 48, 48, 48, 48, 48, 48, 48, 240, 240, 0, 0, 0,
+16, 16, 56, 56, 108, 108, 198, 198, 0, 0, 0, 0, 0, 0, 0, 0,
+0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 254, 0, 0, 0,
+0, 192, 192, 64, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+0, 0, 0, 0, 120, 252, 204, 124, 252, 204, 204, 254, 119, 0, 0, 0,
+192, 192, 192, 192, 248, 252, 204, 204, 204, 204, 204, 252, 248, 0, 0, 0,
+0, 0, 0, 0, 120, 252, 196, 192, 192, 192, 196, 252, 120, 0, 0, 0,
+12, 12, 12, 12, 124, 252, 204, 204, 204, 204, 204, 252, 124, 0, 0, 0,
+0, 0, 0, 0, 120, 252, 204, 252, 248, 192, 196, 252, 120, 0, 0, 0,
+12, 60, 48, 48, 252, 252, 48, 48, 48, 48, 48, 48, 48, 0, 0, 0,
+0, 0, 0, 0, 120, 252, 204, 204, 204, 252, 124, 12, 140, 252, 120, 0,
+192, 192, 192, 192, 248, 252, 204, 204, 204, 204, 204, 204, 204, 0, 0, 0,
+48, 48, 0, 0, 112, 112, 48, 48, 48, 48, 48, 120, 120, 0, 0, 0,
+24, 0, 0, 0, 24, 24, 24, 24, 24, 24, 24, 24, 152, 248, 112, 0,
+192, 192, 196, 204, 216, 240, 224, 240, 216, 200, 204, 198, 198, 0, 0, 0,
+224, 224, 96, 96, 96, 96, 96, 96, 96, 96, 96, 240, 240, 0, 0, 0,
+0, 0, 0, 0, 236, 254, 214, 214, 214, 198, 198, 198, 198, 0, 0, 0,
+0, 0, 0, 0, 248, 252, 204, 204, 204, 204, 204, 204, 204, 0, 0, 0,
+0, 0, 0, 0, 120, 252, 204, 204, 204, 204, 204, 252, 120, 0, 0, 0,
+0, 0, 0, 0, 248, 252, 204, 204, 204, 204, 252, 248, 192, 192, 192, 0,
+0, 0, 0, 0, 124, 252, 204, 204, 204, 204, 252, 124, 12, 12, 6, 0,
+0, 0, 0, 0, 216, 252, 238, 198, 192, 192, 192, 192, 192, 0, 0, 0,
+0, 0, 0, 0, 120, 252, 196, 240, 120, 12, 140, 252, 120, 0, 0, 0,
+48, 48, 48, 48, 252, 252, 48, 48, 48, 48, 48, 28, 12, 0, 0, 0,
+0, 0, 0, 0, 204, 204, 204, 204, 204, 204, 204, 252, 120, 0, 0, 0,
+0, 0, 0, 0, 198, 198, 198, 108, 108, 56, 56, 16, 16, 0, 0, 0,
+0, 0, 0, 0, 198, 198, 198, 214, 214, 124, 108, 108, 40, 0, 0, 0,
+0, 0, 0, 0, 198, 198, 108, 124, 56, 124, 108, 198, 198, 0, 0, 0,
+0, 0, 0, 0, 204, 204, 204, 204, 204, 252, 124, 12, 140, 252, 120, 0,
+0, 0, 0, 0, 252, 252, 24, 24, 48, 48, 96, 252, 252, 0, 0, 0,
+0, 12, 24, 24, 24, 24, 24, 48, 24, 24, 24, 24, 24, 12, 0, 0,
+24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 0,
+0, 48, 24, 24, 24, 24, 24, 12, 24, 24, 24, 24, 24, 48, 0, 0,
+0, 0, 0, 0, 0, 96, 226,158,12,0, 0, 0, 0, 0, 0, 0,
+120, 252, 204, 204, 204, 204, 252, 120, 0, 0, 0, 0, 0, 0, 0, 0
+};
+
+int drawChar1(TFT_t * dev, uint8_t sizew, uint8_t sizeht, int16_t x, int16_t y, unsigned char c, uint16_t color) {
+	c -= 32;
+static const uint8_t fstyle = 0;
+static const uint8_t width = 240;
+static const uint8_t height = 240;
+int fsw = 5; //iod09 font selection
+int fsh = 8; //iod09 font selection
+static uint16_t bg = BLACK;
+  int crad;
+  //int co;
+  //if (fstyle == 1 || fstyle == 2 || fstyle == 3) crad = sizew >> 1;
+  //if (fstyle == DOTMATRIXLED) co = crad * 68 / 100;
+  if (sizew > 3)crad --;
+  if (dev->_font_direction != 3 && dev->_font_direction != 2)
+  {
+    if ((x >= width) || (y >= height) || ((x + (fsw + 1) * sizew - 1) < 0) || ((y + fsh * sizeht - 1) < 0))
+    {
+      return x+(sizew*6);
+    }
+  }
+  for (int8_t i = 0; i < 6; i++ )
+  {
+    uint8_t tcol;
+    if (i == (fsw))
+    {
+      tcol = 0x0;
+    }
+    else
+    {
+      tcol = font1[(c * 5) + i];
+    }
+    for (int8_t j = 0; j < 8; j++)
+    {
+      if (i == 5) tcol = 0;
+      if (tcol & 0x1)
+      {
+        if (sizew == 1 && sizeht == 1)
+        {
+          if (y + j > 319 && (dev->_font_direction == 3 || dev->_font_direction == 2))
+          {
+            lcdDrawPixel(dev, x + i, y + j - 320, color);
+          }
+          else
+          {
+            lcdDrawPixel(dev, x + i, y + j, color);
+          }
+        }
+        else
+        {
+          if (fstyle == 0) lcdDrawFillRect(dev, x + (i * sizew), y + (j * sizeht), (sizew + x) + (i * sizew) - 1, (sizeht + y) + (j * sizeht) - 1, color);
+          /*
+		  if (fstyle == 2)Circle(x + (i * sizew) + crad, y + (j * sizeht) + crad, crad, color);
+          if (fstyle == 1)CircleFilled(x + (i * sizew) + crad, y + (j * sizeht) + crad, crad, color);
+          if (fstyle == 3)
+          {
+            CircleFilled(x + (i * sizew) + crad, y + (j * sizeht) + crad, crad, color);
+            CircleFilled(x + (i * sizew) + co, y + (j * sizeht) + co, crad / 3, WHITE);
+          }
+          if (fstyle == 4)RectangleFilled(x + (i * sizew), y + (j * sizeht), (sizew + x) + (i * sizew) - 2, (sizeht + y) + (j * sizeht) - 2, color);
+          if (fstyle == 5)
+          {
+            uint16_t fadcol = color;
+            fadcol = HighlightColors(fadcol, 10) & 0xffff;
+            int step = 60 / (sizew / 2);
+            if (step < 1) step = 1;
+            for (int n = sizew / 2; n > -1; n --)
+            {
+              Rectangle(x + (i * sizew) + n, y + (j * sizeht) + n, (sizew + x) + (i * sizew) - 1 - n, (sizeht + y) + (j * sizeht) - 1 - n, fadcol);
+              fadcol = HighlightColors(fadcol, step) >> 16;
+            }
+          }
+		  */
+        }
+      }
+      else if (bg != color)
+      {
+        if (sizew == 1 && sizeht == 1)
+        {
+          if (y + j > 319 && (dev->_font_direction == 3 || dev->_font_direction == 2))
+          {
+            lcdDrawPixel(dev, x + i, y + j - 320, bg);
+          }
+          else
+          {
+            lcdDrawPixel(dev, x + i, y + j, bg);
+          }
+        }
+        else
+        {
+          lcdDrawFillRect(dev, x + i * sizew, y + j * sizeht, (sizew + x) + i * sizew - 1, (sizeht + y) + j * sizeht - 1, bg);
+        }
+      }
+      tcol >>= 1;
+    }
+  }
+  return x+(sizew*6);
+}
+
+int drawChar2(TFT_t * dev, uint8_t sizeht , uint8_t sizew, int16_t x, int16_t y, unsigned char c, uint16_t color) {
+	c -= 32;
+uint8_t rotation = dev->_font_direction;
+int fsw = 8; //iod09 font selection
+int fwh = 16; //iod09 font selection
+
+	int next = 0;
+	if (dev->_font_direction == 0) {
+		next = x + fsw * sizew + sizew;
+	} else if (dev->_font_direction == 2) {
+		next = x - fsw * sizew + sizew;
+	} else if (dev->_font_direction == 1) {
+		next = y + fwh * sizeht + sizeht;
+	} else if (dev->_font_direction == 3) {
+		next = y - fwh * sizeht + sizeht;
+	}
+
+	//if(rotation != 3 && rotation != 2){
+	//if((x >= width)||(y >= height)||((x + (fsw + 1) * sizew - 1) < 0)||((y + fsh * sizeht - 1) < 0)){  
+	//return;
+	//}
+	//}
+	for (int8_t j = 0; j < 16; j++ ) {
+		uint8_t trow;
+		trow = font2[(c * 16) + j];
+		for (int8_t i = 0; i < (fsw + 1); i++)
+		{
+			if (i == (fsw))
+			{
+				trow = 0x00;
+			}
+			if (trow & 0x80)
+			{
+				if (sizew == 1 && sizeht == 1)
+				{
+					if(y + j > 159 && (rotation == 3 || rotation == 2))
+					{
+						lcdDrawPixel(dev, x + i, y + j - 160, color);
+					}
+					else
+					{
+						lcdDrawPixel(dev, x + i, y + j, color);
+					}
+				}
+				else
+				{
+					lcdDrawFillRect(dev, x + (i * sizew), y + (j * sizeht), (sizew + x) + (i * sizew) - 1, (sizeht + y) + (j * sizeht) - 1, color);
+				}
+			}
+			else if (dev->_font_fill_color != color)
+			{
+				if (sizew == 1 && sizeht == 1)
+				{
+					if(y + j > 159 && (rotation == 3 || rotation == 2))
+					{
+						lcdDrawPixel(dev, x + i, y + j - 160, dev->_font_fill_color);
+					}
+					else
+					{
+						lcdDrawPixel(dev, x + i, y + j, dev->_font_fill_color);
+					}
+				}
+				else
+				{
+					lcdDrawFillRect(dev, x + (i* sizew), y + (j * sizeht), (sizew + x) + (i* sizew) - 1, (sizeht + y) + (j * sizeht) - 1, dev->_font_fill_color);
+				}
+			}
+			trow <<= 1;
+		}
+	}
+	if (next < 0) next = 0;
+	return next;
+}
+
 // Draw ASCII character
 // x:X coordinate
 // y:Y coordinate
@@ -810,6 +1283,49 @@ int lcdDrawString(TFT_t * dev, FontxFile *fx, uint16_t x, uint16_t y, uint8_t * 
 	return 0;
 }
 
+/* iod 09 large font */
+int lcdDrawString2(TFT_t * dev, uint8_t sizeht , uint8_t sizew, uint16_t x, uint16_t y, uint8_t * ascii, uint16_t color) {
+	int length = strlen((char *)ascii);
+	//printf("lcdDrawString length=%d\n",length);
+	for(int i=0;i<length;i++) {
+		//printf("ascii[%d]=%x x=%d y=%d\n",i,ascii[i],x,y);
+		if (dev->_font_direction == 0)
+			x = drawChar2(dev, sizeht, sizew, x, y, ascii[i], color);
+		if (dev->_font_direction == 1)
+			y = drawChar2(dev, sizeht, sizew, x, y, ascii[i], color);
+		if (dev->_font_direction == 2)
+			x = drawChar2(dev, sizeht, sizew, x, y, ascii[i], color);
+		if (dev->_font_direction == 3)
+			y = drawChar2(dev, sizeht, sizew, x, y, ascii[i], color);
+	}
+	if (dev->_font_direction == 0) return x;
+	if (dev->_font_direction == 2) return x;
+	if (dev->_font_direction == 1) return y;
+	if (dev->_font_direction == 3) return y;
+	return 0;
+}
+
+/* iod 09 small font */
+int lcdDrawString3(TFT_t * dev, uint8_t sizeht , uint8_t sizew, uint16_t x, uint16_t y, uint8_t * ascii, uint16_t color) {
+	int length = strlen((char *)ascii);
+	//printf("lcdDrawString length=%d\n",length);
+	for(int i=0;i<length;i++) {
+		//printf("ascii[%d]=%x x=%d y=%d\n",i,ascii[i],x,y);
+		if (dev->_font_direction == 0)
+			x = drawChar1(dev, sizeht, sizew, x, y, ascii[i], color);
+		if (dev->_font_direction == 1)
+			y = drawChar1(dev, sizeht, sizew, x, y, ascii[i], color);
+		if (dev->_font_direction == 2)
+			x = drawChar1(dev, sizeht, sizew, x, y, ascii[i], color);
+		if (dev->_font_direction == 3)
+			y = drawChar1(dev, sizeht, sizew, x, y, ascii[i], color);
+	}
+	if (dev->_font_direction == 0) return x;
+	if (dev->_font_direction == 2) return x;
+	if (dev->_font_direction == 1) return y;
+	if (dev->_font_direction == 3) return y;
+	return 0;
+}
 
 // Draw Non-Alphanumeric character
 // x:X coordinate
@@ -930,4 +1446,122 @@ void lcdInversionOff(TFT_t * dev) {
 // Display Inversion On
 void lcdInversionOn(TFT_t * dev) {
 	spi_master_write_command(dev, 0x21);	//Display Inversion On
+}
+
+// #########################################################################
+// Draw an arc with a defined thickness
+// #########################################################################
+
+// x,y == coords of centre of arc
+// start_angle = 0 - 359
+// seg_count = number of 3 degree segments to draw (120 => 360 degree arc)
+// rx = x axis radius
+// yx = y axis radius
+// w  = width (thickness) of arc in pixels
+// color = 16 bit color value
+// Note if rx and ry are the same an arc of a circle is drawn
+void lcdFillArc(TFT_t * dev, int x, int y, int start_angle, int seg_count, int rx, int ry, int w, uint16_t color)
+{
+	uint8_t seg = 3; // Segments are 3 degrees wide = 120 segments for 360 degrees
+	uint8_t inc = 6; // Draw segments every 3 degrees, increase to 6 for segmented ring
+
+	// Draw color blocks every inc degrees
+	for (int i = start_angle; i < start_angle + seg * seg_count; i += inc)
+	{
+		// Calculate pair of coordinates for segment start
+		float sx = cos((i - 90) * DEG2RAD);
+		float sy = sin((i - 90) * DEG2RAD);
+		uint16_t x0 = sx * (rx - w) + x;
+		uint16_t y0 = sy * (ry - w) + y;
+		uint16_t x1 = sx * rx + x;
+		uint16_t y1 = sy * ry + y;
+
+		// Calculate pair of coordinates for segment end
+		float sx2 = cos((i + seg - 90) * DEG2RAD);
+		float sy2 = sin((i + seg - 90) * DEG2RAD);
+		int x2 = sx2 * (rx - w) + x;
+		int y2 = sy2 * (ry - w) + y;
+		int x3 = sx2 * rx + x;
+		int y3 = sy2 * ry + y;
+
+		lcdFillTriangle(dev, x0, y0, x1, y1, x2, y2, color);
+		lcdFillTriangle(dev, x1, y1, x2, y2, x3, y3, color);
+	}
+}
+
+//NOTE: Copy of lcdFillArc with parameterized segment size
+void lcdFillArc3(TFT_t * dev, int x, int y, int start_angle, int seg_count, int rx, int ry, int w, uint16_t color, uint8_t segments)
+{
+	uint8_t seg = segments; // Segments
+	uint8_t inc = segments * 2; // Draw segmented ring
+
+	// Draw color blocks every inc degrees
+	for (int i = start_angle; i < start_angle + seg * seg_count; i += inc)
+	{
+		// Calculate pair of coordinates for segment start
+		float sx = cos((i - 90) * DEG2RAD);
+		float sy = sin((i - 90) * DEG2RAD);
+		uint16_t x0 = sx * (rx - w) + x;
+		uint16_t y0 = sy * (ry - w) + y;
+		uint16_t x1 = sx * rx + x;
+		uint16_t y1 = sy * ry + y;
+
+		// Calculate pair of coordinates for segment end
+		float sx2 = cos((i + seg - 90) * DEG2RAD);
+		float sy2 = sin((i + seg - 90) * DEG2RAD);
+		int x2 = sx2 * (rx - w) + x;
+		int y2 = sy2 * (ry - w) + y;
+		int x3 = sx2 * rx + x;
+		int y3 = sy2 * ry + y;
+
+		lcdFillTriangle(dev, x0, y0, x1, y1, x2, y2, color);
+		lcdFillTriangle(dev, x1, y1, x2, y2, x3, y3, color);
+	}
+}
+
+// #########################################################################
+// Draw a circular or elliptical arc with a defined thickness
+// #########################################################################
+
+// x,y == coords of centre of arc
+// start_angle = 0 - 359
+// seg_count = number of 3 degree segments to draw (120 => 360 degree arc)
+// rx = x axis radius
+// yx = y axis radius
+// w  = width (thickness) of arc in pixels
+// color = 16 bit color value
+// Note if rx and ry are the same then an arc of a circle is drawn
+void lcdFillArc2(TFT_t * dev, int x, int y, int start_angle, int seg_count, int rx, int ry, int w, uint16_t color)
+{
+	uint8_t seg = 3; // Segments are 3 degrees wide = 120 segments for 360 degrees
+	uint8_t inc = 6; // Draw segments every 3 degrees, increase to 6 for segmented ring
+
+	// Calculate first pair of coordinates for segment start
+	float sx = cos((start_angle - 90) * DEG2RAD);
+	float sy = sin((start_angle - 90) * DEG2RAD);
+	uint16_t x0 = sx * (rx - w) + x;
+	uint16_t y0 = sy * (ry - w) + y;
+	uint16_t x1 = sx * rx + x;
+	uint16_t y1 = sy * ry + y;
+
+	// Draw color blocks every inc degrees
+	for (int i = start_angle; i < start_angle + seg * seg_count; i += inc)
+	{
+		// Calculate pair of coordinates for segment end
+		float sx2 = cos((i + seg - 90) * DEG2RAD);
+		float sy2 = sin((i + seg - 90) * DEG2RAD);
+		int x2 = sx2 * (rx - w) + x;
+		int y2 = sy2 * (ry - w) + y;
+		int x3 = sx2 * rx + x;
+		int y3 = sy2 * ry + y;
+
+		lcdFillTriangle(dev, x0, y0, x1, y1, x2, y2, color);
+		lcdFillTriangle(dev, x1, y1, x2, y2, x3, y3, color);
+
+		// Copy segment end to sgement start for next segment
+		x0 = x2;
+		y0 = y2;
+		x1 = x3;
+		y1 = y3;
+	}
 }

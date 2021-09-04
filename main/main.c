@@ -10,6 +10,8 @@
 #include "esp_vfs.h"
 #include "esp_spiffs.h"
 
+#include "lib/ADS1015/src/ADS1015.h"
+
 #include "lib/st7789/st7789.h"
 #include "lib/st7789/fontx.h"
 #include "lib/st7789/bmpfile.h"
@@ -19,13 +21,30 @@
 #include "esp-i2c.h"
 #include "display.h"
 
-void print_haptic_registers();
-void test_haptic_now();
+#include "lib/haptic/haptic.h"
 
-float accel_g_x;
-float accel_g_y;
-float accel_g_z;
+const char * version = "0.1.0";
 
+int gyro_x, gyro_y, gyro_z;
+float accel_g_x, accel_g_x_delta;
+float accel_g_y, accel_g_y_delta;
+float accel_g_z, accel_g_z_delta;
+
+bool is_remote_idle = true; //NOTE: Controlled by IMU
+bool display_second_screen = false;
+bool display_blank_now = false;
+
+bool is_throttle_idle = false;
+bool is_throttle_locked = false;
+
+TickType_t esc_last_responded = 0;
+
+/* User Settings */
+#include "user-settings.h"
+uint8_t user_settings_index = 0;
+bool remote_in_setup_mode = false;
+user_settings_t my_user_settings;
+/* User Settings */
 
 /* Piezo */
 #include "lib/melody/melody.h"
@@ -97,18 +116,49 @@ static void piezo_test(void *arg)
     // Initialize fade service.
     ledc_fade_func_install(0);
 
+	melody_play(MELODY_LOG_START, true);
+	haptic_play(MELODY_LOG_START, true);
+	TickType_t startTick = xTaskGetTickCount();
+	TickType_t endTick, diffTick;
+	bool was_remote_idle = false;
     while (1) {
-        if (accel_g_x > 1.75) {
-			melody_play(MELODY_LOG_START, false);
+		// Low Battery Alert
+		if (adc_raw_battery_level < 525 || adc_raw_battery_level == ADS1015_ERROR) //TODO: Don't hardcode 525 as minimum battery value
+		{
+			melody_play(MELODY_GOTCHI_FAULT, false);
+			//NOTE: No Haptics PLEASE
 		}
-		if (accel_g_y > 1.75) {
-			melody_play(MELODY_STARTUP, false);
+		// Idle Throttle Alert
+		if (is_throttle_idle) {
+			melody_play(MELODY_ESC_FAULT, false);
+			//NOTE: No Haptics
 		}
-		if (accel_g_z > 1.75) {
-			melody_play(MELODY_BLE_SUCCESS, false);
+
+		// Idle IMU Alert
+		if (is_remote_idle)
+		{
+			if (!was_remote_idle)
+			{
+				was_remote_idle = true;
+				startTick = xTaskGetTickCount();
+			}
+			if (!gpio_usb_detect)
+			{
+				// Check if we've been idle for more than 5 minutes
+				endTick = xTaskGetTickCount();
+				diffTick = endTick - startTick;
+				if (diffTick*portTICK_RATE_MS > 5 * 60 * 1000)
+				{
+					melody_play(MELODY_ESC_FAULT, false);
+				}
+			}
 		}
-		melody_step();
-		
+		else 
+		{
+			was_remote_idle = false;
+		}
+
+		if (!my_user_settings.disable_piezo) melody_step();
 		
 		vTaskDelay(10/portTICK_PERIOD_MS);
     }
@@ -125,6 +175,8 @@ static void piezo_test(void *arg)
 #include "freertos/queue.h"
 #include "driver/gpio.h"
 
+#include "button.h"
+
 #define GPIO_OUTPUT_IO_0    2  //LED
 #define GPIO_OUTPUT_IO_1    32 //MCU_LATCH
 #define GPIO_OUTPUT_PIN_SEL  ((1ULL<<GPIO_OUTPUT_IO_0) | (1ULL<<GPIO_OUTPUT_IO_1))
@@ -136,76 +188,105 @@ static void piezo_test(void *arg)
 #define GPIO_INPUT_IO_4     23 //USB_PRES
 #define GPIO_INPUT_PIN_SEL  ((1ULL<<GPIO_INPUT_IO_0) | (1ULL<<GPIO_INPUT_IO_1) | (1ULL<<GPIO_INPUT_IO_2) | (1ULL<<GPIO_INPUT_IO_3))
 #define GPIO_INPUT_PINS_UP  ((1ULL<<GPIO_INPUT_IO_4))
-#define ESP_INTR_FLAG_DEFAULT 0
-
-static xQueueHandle gpio_evt_queue = NULL;
-
-static void IRAM_ATTR gpio_isr_handler(void* arg)
-{
-    uint32_t gpio_num = (uint32_t) arg;
-    xQueueSendFromISR(gpio_evt_queue, &gpio_num, NULL);
-}
 
 int gpio_switch_1 = 0;
 int gpio_switch_2 = 0;
 int gpio_switch_3 = 0;
 int gpio_switch_detect = 0;
 int gpio_usb_detect = 0;
-static void GPIO_Task(void* arg)
+static void gpio_input_task(void* arg)
 {
+    button_event_t ev;
+	QueueHandle_t button_events = button_init(GPIO_INPUT_PIN_SEL, GPIO_INPUT_PINS_UP);
+
 	gpio_switch_3 = !gpio_get_level(GPIO_INPUT_IO_0);
 	gpio_switch_1 = !gpio_get_level(GPIO_INPUT_IO_1);
 	gpio_switch_2 = !gpio_get_level(GPIO_INPUT_IO_2);
 	gpio_switch_detect = !gpio_get_level(GPIO_INPUT_IO_3);
 	gpio_usb_detect = !gpio_get_level(GPIO_INPUT_IO_4);
 
-    uint32_t io_num;
-    for(;;) {
-        if(xQueueReceive(gpio_evt_queue, &io_num, portMAX_DELAY)) {
-            printf("GPIO[%d] intr, val: %d\n", io_num, gpio_get_level(io_num));
-			switch(io_num)
-			{
-				case GPIO_INPUT_IO_1:
-					gpio_switch_1 = !gpio_get_level(io_num);
-					printf("SW1 %d\n", gpio_switch_1);
-					if (gpio_switch_1 == 0)
+	// Check if we are to enter pairing mode
+	if (!gpio_get_level(GPIO_INPUT_IO_0))
+	{
+		remote_in_pairing_mode = true;
+	}
+
+	while (true) {
+		if (xQueueReceive(button_events, &ev, 1000/portTICK_PERIOD_MS)) {
+			if ((ev.pin == GPIO_INPUT_IO_0) && (ev.event == BUTTON_DOWN)) {
+				// User Button (SW3 on HW v1.2 PCB)
+				if (remote_in_setup_mode)
+				{
+					switch(user_settings_index) 
 					{
-						//Turn LED ON
-						gpio_set_level(GPIO_OUTPUT_IO_0, 1);
-					} 
-					else
-					{
-						//Turn LED OFF
-						gpio_set_level(GPIO_OUTPUT_IO_0, 0);
+						case SETTING_PIEZO:
+							my_user_settings.disable_piezo = !my_user_settings.disable_piezo;
+						break;
+						case SETTING_BUZZER:
+							my_user_settings.disable_buzzer = !my_user_settings.disable_buzzer;
+						break;
+						case SETTING_SPEED:
+							my_user_settings.display_mph = !my_user_settings.display_mph;
+						break;
+						case SETTING_TEMP:
+							my_user_settings.dispaly_fahrenheit = !my_user_settings.dispaly_fahrenheit;
+						break;
+						case SETTING_THROTTLE:
+							my_user_settings.throttle_reverse = !my_user_settings.throttle_reverse;
+						break;
+						case SETTING_MODEL:
+							if (++my_user_settings.remote_model > MODEL_CLINT) my_user_settings.remote_model = MODEL_ALBERT;
+						break;
 					}
-				break;
-				case GPIO_INPUT_IO_2:
-					gpio_switch_2 = !gpio_get_level(io_num);
-					printf("SW2 %d\n", gpio_switch_2);
-					if (gpio_switch_2 == 0)
-					{
-						//test_haptic_now();
-					}
-				break;
-				case GPIO_INPUT_IO_0:
-					gpio_switch_3 = !gpio_get_level(io_num);
-					printf("SW3%d\n", gpio_switch_3);
-				break;
-				case GPIO_INPUT_IO_3: //switch detect
-					printf("SWITCH DETECT %d\n", gpio_get_level(io_num));
-					if( gpio_get_level(io_num) == 1)
-					{
-						/// Turn battery power off
-						gpio_set_level(GPIO_OUTPUT_IO_1, 0);
-					}
-				break;
-				case GPIO_INPUT_IO_4:
-					gpio_usb_detect = !gpio_get_level(io_num);
-					printf("USB DETECT %d\n", gpio_usb_detect);
-				break;
+					save_user_settings(&my_user_settings);
+					continue;
+				}
+
+				// No action desired when throttle is locked
+				if (is_throttle_locked) continue;
+
+				// Clear alert or change display
+				if (alert_visible) alert_clear = true;
+				else
+				{
+					//Switch between display views
+					display_second_screen = !display_second_screen;
+					display_blank_now = true;
+				}
 			}
-        }
-    }
+			if ((ev.pin == GPIO_INPUT_IO_0) && (ev.event == BUTTON_DOUBLE_CLICK)) {
+				// SW3 on HW v1.2 PCB
+				melody_play(MELODY_STARTUP, true);
+				haptic_play(MELODY_STARTUP, true);
+				is_throttle_locked = !is_throttle_locked; // Toggle throttle lock
+				if (is_throttle_locked)
+				{
+					display_blank_now = true; // Clear display
+					display_second_screen = false; // Request primary screen with throttle locked
+				}
+				else display_blank_now = true; // Clear the display if we turn off throttle lock
+				ESP_LOGI(__FUNCTION__, "Throttle lock is %d", is_throttle_locked);
+			}
+			if ((ev.pin == GPIO_INPUT_IO_1) && (ev.event == BUTTON_DOWN)) {
+				// SW1 on HW v1.2 PCB
+			}
+			if ((ev.pin == GPIO_INPUT_IO_2) && (ev.event == BUTTON_DOWN)) {
+				// SW2 on HW v1.2 PCB
+			}
+			if ((ev.pin == GPIO_INPUT_IO_3) && (ev.event == BUTTON_HELD)) {
+				melody_play(MELODY_GPS_LOST, true);
+				haptic_play(MELODY_GPS_LOST, true);
+				ESP_LOGI(__FUNCTION__, "Setting MCU_LATCH to 0");
+				/// Turn Power switch LED off
+				gpio_set_level(GPIO_OUTPUT_IO_0, 0);
+				/// Turn battery power off
+				gpio_set_level(GPIO_OUTPUT_IO_1, 0);
+			}
+			if (ev.pin == GPIO_INPUT_IO_4) {
+				gpio_usb_detect = (ev.event != BUTTON_UP);
+			}
+		}
+	}
 }
 static void gpio_init_remote()
 {
@@ -225,49 +306,13 @@ static void gpio_init_remote()
 
 	/// Turn LED on with a blink
 	gpio_set_level(GPIO_OUTPUT_IO_0, 1);
-	vTaskDelay(500/10);
+	vTaskDelay(500/portTICK_PERIOD_MS);
 	gpio_set_level(GPIO_OUTPUT_IO_0, 0);
-	vTaskDelay(500/10);
+	vTaskDelay(500/portTICK_PERIOD_MS);
 	gpio_set_level(GPIO_OUTPUT_IO_0, 1);
 
-	/// INPUTS
-    io_conf.intr_type = GPIO_INTR_ANYEDGE;
-    io_conf.pin_bit_mask = GPIO_INPUT_PIN_SEL;
-    io_conf.mode = GPIO_MODE_INPUT;
-    io_conf.pull_up_en = 0;
-	io_conf.pull_down_en = 1;
-    gpio_config(&io_conf);
-
-    io_conf.intr_type = GPIO_INTR_ANYEDGE;
-    io_conf.pin_bit_mask = GPIO_INPUT_PINS_UP;
-    io_conf.mode = GPIO_MODE_INPUT;
-    io_conf.pull_up_en = 1;
-	io_conf.pull_down_en = 0;
-    gpio_config(&io_conf);
-
-    //change gpio intrrupt type
-    //gpio_set_intr_type(GPIO_INPUT_IO_0, GPIO_INTR_ANYEDGE);
-	//gpio_set_intr_type(GPIO_INPUT_IO_1, GPIO_INTR_ANYEDGE);
-	//gpio_set_intr_type(GPIO_INPUT_IO_2, GPIO_INTR_ANYEDGE);
-	//gpio_set_intr_type(GPIO_INPUT_IO_3, GPIO_INTR_ANYEDGE);
-	//gpio_set_intr_type(GPIO_INPUT_IO_4, GPIO_INTR_ANYEDGE);
-
-    //create a queue to handle gpio event from isr
-    gpio_evt_queue = xQueueCreate(10, sizeof(uint32_t));
     //start gpio task
-    xTaskCreate(GPIO_Task, "gpio_task", 2048, NULL, 10, NULL);
-
-    //install gpio isr service
-    gpio_install_isr_service(ESP_INTR_FLAG_DEFAULT);
-    //hook isr handler for specific gpio pin
-    gpio_isr_handler_add(GPIO_INPUT_IO_0, gpio_isr_handler, (void*) GPIO_INPUT_IO_0);
-    gpio_isr_handler_add(GPIO_INPUT_IO_1, gpio_isr_handler, (void*) GPIO_INPUT_IO_1);
-    gpio_isr_handler_add(GPIO_INPUT_IO_2, gpio_isr_handler, (void*) GPIO_INPUT_IO_2);
-	gpio_isr_handler_add(GPIO_INPUT_IO_3, gpio_isr_handler, (void*) GPIO_INPUT_IO_3);
-	gpio_isr_handler_add(GPIO_INPUT_IO_4, gpio_isr_handler, (void*) GPIO_INPUT_IO_4);
-
-    //remove isr handler for gpio number.
-    ////gpio_isr_handler_remove(GPIO_INPUT_IO_0);
+    xTaskCreate(gpio_input_task, "gpio_task", 2048, NULL, 10, NULL);
 }
 /* GPIO */
 
@@ -280,51 +325,113 @@ uint16_t adc_raw_joystick;
 uint16_t adc_raw_joystick_2;
 uint16_t adc_raw_battery_level;
 uint16_t adc_raw_rssi;
-uint8_t joystick_value_mapped = 127; // Center stick
+#define JOYSTICK_OFF_CENTER 7
+#define CENTER_JOYSTICK 127
+uint8_t joystick_value_mapped = CENTER_JOYSTICK;
 long map(long x, long in_min, long in_max, long out_min, long out_max);
 
-
+static bool adc_is_first_read = true;
 
 static void i2c_task(void *arg)
 {
+	mpu6050_rotation_t gyro;
 	mpu6050_acceleration_t accel;
 	float accel_bias[3] = {0, 0, 0};
-	float gyro_bias[3] = {0, 0, 0};
+	//float gyro_bias[3] = {0, 0, 0};
 
 	int8_t range = mpu6050_get_full_scale_accel_range();
 	float accel_res = mpu6050_get_accel_res(range);
 
+	bool was_throttle_idle = false;
+	TickType_t startTickThrottleIdle = xTaskGetTickCount();
+
 	ADS1015_init();
 	while(1)
 	{
-		/* Program State */
-		printf("SW1:%d SW2:%d SW3:%d USB:%d JOY1:%04d JOY2:%04d BATT:%04d RSSI:%04d ", gpio_switch_1, gpio_switch_2, gpio_switch_3, gpio_usb_detect, adc_raw_joystick, adc_raw_joystick_2, adc_raw_battery_level, adc_raw_rssi);
 		/* ADC */
+		//TODO: osrr_state.adc.error = true;
 		adc_raw_joystick = ADS1015_readADC_SingleEnded(0);
-		joystick_value_mapped = map(adc_raw_joystick, 2, 1569, 0, 255);
-		printf("Throttle = %d ", joystick_value_mapped);
+		// Update joystick value if throttle is not locked
+		if (!is_throttle_locked && adc_raw_joystick != ADS1015_ERROR)
+		{
+			// Map throttle, checking for reversed user setting
+			if (my_user_settings.throttle_reverse) joystick_value_mapped = 255 - map(adc_raw_joystick, 2, 1632, 0, 255);
+			else joystick_value_mapped = map(adc_raw_joystick, 0, 1700, 0, 255);
 
-		adc_raw_battery_level = ADS1015_readADC_SingleEnded(1);
-		adc_raw_joystick_2 = ADS1015_readADC_SingleEnded(2);
+			// On first read only
+			if (adc_is_first_read)
+			{
+				adc_is_first_read = false;
+				// Check for full stick input to enter setup mode
+				if (joystick_value_mapped < 3 || joystick_value_mapped > 251) {
+					ESP_LOGI(__FUNCTION__, "Remote entering setup mode (%d)", joystick_value_mapped);
+					remote_in_setup_mode = true;
+					display_blank_now = true;
+				}
+				// Check for center stick
+				else if (joystick_value_mapped < CENTER_JOYSTICK - JOYSTICK_OFF_CENTER || joystick_value_mapped > CENTER_JOYSTICK + JOYSTICK_OFF_CENTER) {
+					ESP_LOGW(__FUNCTION__, "Joystick not center (%d) on startup. Locking throttle", joystick_value_mapped);
+					is_throttle_locked = true;
+				}
+			}
+			// Check if joystick is center to determine if it's in use
+			if (joystick_value_mapped > CENTER_JOYSTICK - JOYSTICK_OFF_CENTER && joystick_value_mapped < CENTER_JOYSTICK + JOYSTICK_OFF_CENTER)
+			{
+				if (!was_throttle_idle)
+				{
+					was_throttle_idle = true;
+					startTickThrottleIdle = xTaskGetTickCount();
+				}
+				if (!gpio_usb_detect)
+				{
+					// Check if we've been idle for more than 5 seconds
+					if ((xTaskGetTickCount() - startTickThrottleIdle)*portTICK_RATE_MS > 5 * 60 * 1000)
+					{
+						is_throttle_idle = true;
+					}
+				}
+			} else {
+				was_throttle_idle = false;
+				is_throttle_idle = false;
+			}
+		}
+		else
+		{
+			joystick_value_mapped = CENTER_JOYSTICK; //NOTE: Zero input if is_throttle_locked
+		}
+
+		adc_raw_battery_level = ADS1015_readADC_SingleEnded(2);
+		adc_raw_joystick_2 = ADS1015_readADC_SingleEnded(1);
 		adc_raw_rssi = ADS1015_readADC_SingleEnded(3);
 
 		/* IMU */
-
+		mpu6050_get_rotation(&gyro);
 		mpu6050_get_acceleration(&accel);
-		//printf("accel raw x%d y%d z%d\n", accel.accel_x, accel.accel_y, accel.accel_y);
 
-		accel_g_x = (float) accel.accel_x * accel_res - accel_bias[0];
-		accel_g_y = (float) accel.accel_y * accel_res - accel_bias[1];
-		accel_g_z = (float) accel.accel_z * accel_res - accel_bias[2];
+		float accel_gx = (float) accel.accel_x * accel_res - accel_bias[0];
+		float accel_gy = (float) accel.accel_y * accel_res - accel_bias[1];
+		float accel_gz = (float) accel.accel_z * accel_res - accel_bias[2];
 
-		if (accel_g_x < 0)
-			accel_g_x *= -1;
-		if (accel_g_y < 0)
-			accel_g_y *= -1;
-		if (accel_g_z < 0)
-			accel_g_z *= -1;
+		accel_g_x_delta = accel_g_x - accel_gx;
+		accel_g_y_delta = accel_g_y - accel_gy;
+		accel_g_z_delta = accel_g_z - accel_gz;
+		accel_g_x = (0.2 * accel_gx) + (0.8 * accel_g_x);
+		accel_g_y = (0.2 * accel_gy) + (0.8 * accel_g_y);
+		accel_g_z = (0.2 * accel_gz) + (0.8 * accel_g_z);
 
-		printf("accel G x%02f y%02f z%02f\n", accel_g_x, accel_g_y, accel_g_z);
+		gyro_x = gyro.gyro_x;
+		gyro_y = gyro.gyro_y;
+		gyro_z = gyro.gyro_z;
+		//ESP_LOGI(__FUNCTION__, "ADC joy1:%d joy2:%d batt:%d rssi:%d IMU x:%f y:%f z:%f", adc_raw_joystick, adc_raw_joystick_2, adc_raw_battery_level, adc_raw_rssi, accel_g_x, accel_g_y, accel_g_z);
+		//ESP_LOGI(__FUNCTION__, "IMU x:%d y:%d z:%d", gyro_x, gyro_y, gyro_z);
+
+		if (accel_g_x == 0 && accel_g_y == 0 && accel_g_z == 0) {
+			ESP_LOGE(__FUNCTION__, "IMU not responding");
+			//TODO: osrr_state.imu.error = true;
+		}
+
+		/* Haptic */
+		if (!my_user_settings.disable_buzzer) haptic_step();
 	}
 }
 /* I2C Tasks */
@@ -337,15 +444,14 @@ static void i2c_task(void *arg)
 
 #define PACKET_VESC						0
 TELEMETRY_DATA esc_telemetry;
+TELEMETRY_DATA esc_telemetry_last_fault;
 
 int uart_write_bytes();
 static void uart_send_buffer(unsigned char *data, unsigned int len) {
-	for (int i = 0;i < len;i++) {
-		uart_write_bytes(0/*XBEE_UART_PORT_NUM*/, data, len);
-	}
+	uart_write_bytes(1/*TODO: undefined: XBEE_UART_PORT_NUM*/, data, len);
 }
 void process_packet_vesc(unsigned char *data, unsigned int len) {
-
+	esc_last_responded = xTaskGetTickCount();
 	if (data[0] == COMM_GET_VALUES_SETUP)
 	{
 		int index = 1;
@@ -370,23 +476,49 @@ void process_packet_vesc(unsigned char *data, unsigned int len) {
 		esc_telemetry.num_vescs = data[index++];
 		esc_telemetry.battery_wh = buffer_get_float32(data, 1000.0, &index);
 
-		printf("temp esc %f\n", esc_telemetry.temp_mos);
-		printf("temp motor %f\n", esc_telemetry.temp_motor);
-		printf("current motor %f\n", esc_telemetry.current_motor);
-		printf("current in %f\n", esc_telemetry.current_in);
-		printf("speed %f\n", esc_telemetry.speed);
-		printf("batt lvl %f\n", esc_telemetry.battery_level);
-		printf("voltage  %f\n", esc_telemetry.v_in);
-		printf("fault %d\n", esc_telemetry.fault_code);
-		printf("num vescs %d\n", esc_telemetry.num_vescs);
+		if (esc_telemetry.fault_code != FAULT_CODE_NONE) {
+			esc_telemetry_last_fault = esc_telemetry;
+			if (!alert_visible)
+			{
+				alert_show = true;
+				display_blank_now = true;
+				display_second_screen = false;
+			}
+			melody_play(MELODY_ESC_FAULT, false);
+			haptic_play(MELODY_ESC_FAULT, false);
+		}
+		ESP_LOGI(__FUNCTION__, "Temp ESC %f Motor %f, Current In %f Out %f, Speed %f, Voltage %f Fault %d ESCs %d", esc_telemetry.temp_mos, esc_telemetry.temp_motor, esc_telemetry.current_in, esc_telemetry.current_motor, esc_telemetry.speed, esc_telemetry.v_in, esc_telemetry.fault_code, esc_telemetry.num_vescs);
+	} else {
+		ESP_LOGW(__FUNCTION__, "Unknown message type received from ESC (%d)", data[0]);
 	}
 }
 /* VESC */
 
 /* XBEE/UART */
+#include "espnow.h"
+
+#include "driver/uart.h"
+#include "lib/vesc/buffer.h"
+#include "lib/vesc/crc.h"
+
+#define XBEE_TXD 16
+#define XBEE_RXD 17
+#define XBEE_BAUD 115200
+#define XBEE_UART_PORT_NUM 1
+#define XBEE_BUF_SIZE (1024)
+
+char str_pairing_1[15] = {0};
+char str_pairing_2[15] = {0};
+char str_pairing_3[15] = {0};
+char str_pairing_4[15] = {0};
 bool remote_in_pairing_mode = false;
-uint8_t remote_xbee_ch = 0x0B; // Valid range 0x0B - 0x1A
+uint8_t remote_xbee_ch = 0x0B; // Valid range 0x0B - 0x1A (11-26)
 uint16_t remote_xbee_id = 0x7FFF; // Valid range 0x0 - 0xFFFF
+
+static void xbee_send_string(unsigned char *data) {
+	unsigned int len = strlen((char*)data);
+	uart_write_bytes(XBEE_UART_PORT_NUM, data, len);
+}
 
 #include "esp_wifi.h"
 #include "nvs_flash.h"
@@ -401,6 +533,10 @@ void xbee_init(void)
 
 	remote_xbee_id = mac_long % 0xFFFF;
 	printf("XBEE ID 0x%04x\n", remote_xbee_id);
+
+	remote_xbee_ch = mac_long % 0x1A;
+	if (remote_xbee_ch < 0x0B) remote_xbee_ch += 0x0B;
+	printf("XBEE CH 0x%02x\n", remote_xbee_ch);
 }
 /* WiFi should start before using ESPNOW */
 static void example_wifi_init(void)
@@ -408,29 +544,51 @@ static void example_wifi_init(void)
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK( esp_wifi_init(&cfg) );
-    ESP_ERROR_CHECK( esp_wifi_set_storage(WIFI_STORAGE_RAM) );
-    ESP_ERROR_CHECK( esp_wifi_set_mode(ESP_IF_WIFI_AP) );
-    ESP_ERROR_CHECK( esp_wifi_start());
+    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+    ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
+    ESP_ERROR_CHECK(esp_wifi_set_mode(ESP_IF_WIFI_AP));
+    ESP_ERROR_CHECK(esp_wifi_start());
 }
-
-#include "driver/uart.h"
-#include "lib/vesc/buffer.h"
-#include "lib/vesc/crc.h"
-
-#define XBEE_TXD 16
-#define XBEE_RXD 17
-#define XBEE_BAUD 115200
-#define XBEE_UART_PORT_NUM 1
-#define XBEE_BUF_SIZE (1024)
 
 void setNunchuckValues();
 int packSendPayload(uint8_t * payload, int lenPay);
 
+static bool xbee_wait_ok(uint8_t *data, bool is_fatal)
+{
+	TickType_t startTick = xTaskGetTickCount();
+	TickType_t endTick, diffTick;
+	bool receivedOK = false;
+	bool receivedO = false;
+	bool receivedK = false;
+	endTick = xTaskGetTickCount();
+	diffTick = endTick - startTick;
+	while(!receivedOK && diffTick*portTICK_RATE_MS < 1500)
+	{
+		int length = uart_read_bytes(XBEE_UART_PORT_NUM, data, XBEE_BUF_SIZE, 20 / portTICK_RATE_MS);
+		if (length) {
+			for (int i = 0; i < length; i++) {
+				if (data[i] == 0x4F) receivedO = true;
+				if (data[i] == 0x4B) receivedK = true;
+			}
+		}
+		if (receivedO && receivedK) receivedOK = true;
+
+		endTick = xTaskGetTickCount();
+		diffTick = endTick - startTick;
+	}
+	if (is_fatal && !receivedOK)
+	{
+		ESP_LOGE(__FUNCTION__,"XBEE did not OK! Haulting");
+		while(1) {
+			vTaskDelay(1000/portTICK_PERIOD_MS);
+		}
+	}
+	return receivedOK;
+}
 static void xbee_task(void *arg)
 {
-	//example_wifi_init();
-	//xbee_init();
+	//TODO: Wait for ADC task to read Joystick and determine Setup Mode (don't send full throttle) or Throttle Lock
+	vTaskDelay(250/portTICK_PERIOD_MS);
 
     /* Configure parameters of an UART driver,
      * communication pins and install the driver */
@@ -458,25 +616,139 @@ static void xbee_task(void *arg)
 
 	packet_init(uart_send_buffer, process_packet_vesc, PACKET_VESC);
 
-
+	uint8_t limiter = 0;
     while (1) {
         // Read data from the UART
         int len = uart_read_bytes(XBEE_UART_PORT_NUM, data, XBEE_BUF_SIZE, 20 / portTICK_RATE_MS);
 
+		if (remote_in_setup_mode)
+		{
+			// Do not communicate with the receiver while in setup mode
+			vTaskDelay(100/portTICK_PERIOD_MS);
+			continue;
+		}
+
 		if (remote_in_pairing_mode)
 		{
+			//NOTE: Must execute after nvs_flash_init
+			example_wifi_init(); // Enable WiFi for pairing mode
+			xbee_init(); // Generate unique XBee ID & CH
+			// Generate random XBee MY & DL
+			uint16_t xbee_my_address = esp_random() % 0xFFFF;
+			uint16_t xbee_rx_address = esp_random() % 0xFFFF;
+			ESP_LOGI(__FUNCTION__,"Entering Pairing Mode");
 
+			ESP_LOGI(__FUNCTION__,"Configuring radio");
+
+			vTaskDelay(1000/portTICK_PERIOD_MS);
+			xbee_send_string((unsigned char *)"+++");
+			//TODO: Check for OK message from XBEE at all baud rates
+			if (!xbee_wait_ok(data, false)) {
+				sprintf(str_pairing_1, "Radio did not");
+				sprintf(str_pairing_2, "respond");
+				sprintf(str_pairing_3, "Power cycle to");
+				sprintf(str_pairing_4, "try again");
+				while(1) {
+					vTaskDelay(100/portTICK_PERIOD_MS);
+				}
+			} else {
+				sprintf(str_pairing_1, "Radio OK");
+			}
+			ESP_LOGI(__FUNCTION__,"XBEE READY");
+
+			bool configuration_success = true;
+			unsigned char write_data[10] = {0};
+			sprintf((char*)write_data, "ATCH%02x\r", remote_xbee_ch); // Network Channel
+			xbee_send_string(write_data);
+			if (configuration_success) configuration_success = xbee_wait_ok(data, false);
+
+			sprintf((char*)write_data, "ATID%04x\r", remote_xbee_id); // Network ID
+			xbee_send_string(write_data);
+			if (configuration_success) configuration_success = xbee_wait_ok(data, false);
+
+			xbee_send_string((unsigned char*)"ATDH0\r"); // Destination High is 0
+			if (configuration_success) configuration_success = xbee_wait_ok(data, false);
+
+			sprintf((char*)write_data, "ATDL%04x\r", xbee_rx_address); // Destination Low is randomized
+			xbee_send_string(write_data);
+			if (configuration_success) configuration_success = xbee_wait_ok(data, false);
+
+			sprintf((char*)write_data, "ATMY%04x\r", xbee_my_address); // My Address is randomized
+			xbee_send_string(write_data);
+			if (configuration_success) configuration_success = xbee_wait_ok(data, false);
+
+			xbee_send_string((unsigned char*)"ATBD7\r"); // Baud 115200
+			if (configuration_success) configuration_success = xbee_wait_ok(data, false);
+
+			xbee_send_string((unsigned char*)"ATD70\r"); // Digital IO7 is Disabled
+			if (configuration_success) configuration_success = xbee_wait_ok(data, false);
+
+			xbee_send_string((unsigned char*)"ATWR\r"); // Write configuration
+			if (configuration_success) configuration_success = xbee_wait_ok(data, false);
+
+			xbee_send_string((unsigned char*)"ATCN\r"); // Exit Command mode
+			if (configuration_success) configuration_success = xbee_wait_ok(data, false);
+
+			if (configuration_success) {
+				sprintf(str_pairing_2, "Config OK");
+				sprintf(str_pairing_3, "Searching for");
+				sprintf(str_pairing_4, "receiver");
+			} else {
+				sprintf(str_pairing_2, "Config Failed");
+				while(1) {
+					vTaskDelay(100/portTICK_PERIOD_MS);
+				}
+			}
+
+			printf("Starting ESPNOW\n");
+			// Pass XBEE CH, ID, MY, DL for transmission to receiver
+			if (example_espnow_init(remote_xbee_ch, remote_xbee_id, xbee_my_address, xbee_rx_address, NULL) == ESP_OK)
+			{
+				display_second_screen = false; //NOTE: Pairing button on boot will set display_second_screen true
+				display_blank_now = true;
+				sprintf(str_pairing_3, "Pairing was");
+				sprintf(str_pairing_4, "Successful");
+				melody_play(MELODY_BLE_SUCCESS, true);
+				haptic_play(MELODY_BLE_SUCCESS, true);
+				vTaskDelay(3000/portTICK_PERIOD_MS); // Wait a few seconds
+			}
+			else
+			{
+				display_blank_now = true;
+				sprintf(str_pairing_3, "Pairing");
+				sprintf(str_pairing_4, "FAILED");
+				melody_play(MELODY_BLE_FAIL, true);
+				haptic_play(MELODY_BLE_FAIL, true);
+				vTaskDelay(10000/portTICK_PERIOD_MS);
+			}
+			display_blank_now = true;
+
+			printf("Exiting Pairing Mode\n");
+			// Pairing complete
+			remote_in_pairing_mode = false;
+
+			// Turn off wifi to save power after pairing
+			ESP_ERROR_CHECK(esp_wifi_stop());
 		}
 		else
 		{
 			if (len) {
-				printf("UART Received %d bytes\n", len);
+				//printf("UART Received %d bytes\n", len);
 				for (int i = 0;i < len;i++) {
 					packet_process_byte(data[i], PACKET_VESC);
 				}
 			}
 
 			setNunchuckValues();
+
+			//Request telemetry
+			if (++limiter > 10)
+			{
+				//printf("requesting telemetry\n");
+				limiter = 0;
+				uint8_t command[1] = { COMM_GET_VALUES_SETUP };
+				packSendPayload(command, 1);
+			}
 		}
 		
 		vTaskDelay(10/portTICK_PERIOD_MS);
@@ -487,7 +759,7 @@ void setNunchuckValues() {
 	int32_t ind = 0;
 	uint8_t payload[11];
 
-	payload[ind++] = 35; //COMM_SET_CHUCK_DATA;
+	payload[ind++] = COMM_SET_CHUCK_DATA;
 	payload[ind++] = 127;//nunchuck.valueX;
 	payload[ind++] = joystick_value_mapped;//nunchuck.valueY;
 	buffer_append_bool(payload, 0/*nunchuck.lowerButton*/, &ind);
@@ -559,18 +831,6 @@ static void SPIFFS_Directory(char * path) {
 	closedir(dir);
 }
 
-// You have to set these CONFIG value using menuconfig.
-#if 0
-#define CONFIG_WIDTH  240
-#define CONFIG_HEIGHT 240
-#define CONFIG_MOSI_GPIO 23
-#define CONFIG_SCLK_GPIO 18
-#define CONFIG_CS_GPIO -1
-#define CONFIG_DC_GPIO 19
-#define CONFIG_RESET_GPIO 15
-#define CONFIG_BL_GPIO -1
-#endif
-
 void ST7789_Task(void *pvParameters)
 {
 	// set font file
@@ -599,24 +859,163 @@ void ST7789_Task(void *pvParameters)
 	lcdInversionOn(&dev);
 #endif
 
+	// FreeSK8 Logo
 	lcdFillScreen(&dev, BLACK);
-#ifdef CONFIG_IDF_TARGET_ESP32
-		char file[32];
-		strcpy(file, "/spiffs/esp32.jpeg");
-		JPEGTest(&dev, file, CONFIG_WIDTH, CONFIG_HEIGHT);
-		vTaskDelay(1000/10);
-#endif
+	drawFirmwareVersion(&dev, (char *)version);
+	if (remote_in_pairing_mode) {
+		drawJPEG(&dev, (char*)"/spiffs/logo_badge_pairing.jpg", 206, 179, 17, 63);
+	} else {
+		drawJPEG(&dev, (char*)"/spiffs/logo_badge.jpg", 206, 114, 17, 63);
+	}
+
+	vTaskDelay(1000/portTICK_PERIOD_MS);
 	lcdFillScreen(&dev, BLACK);
 
+	bool is_display_visible = true;
+	TickType_t remote_is_idle_tick = xTaskGetTickCount();
+	TickType_t remote_is_visible_tick = xTaskGetTickCount();
 	while(1) {
+		// Check for setup mode
+		if (remote_in_setup_mode)
+		{
+			// Move settings selection up and down
+			if (joystick_value_mapped < 55 && user_settings_index < SETTING_MODEL) ++user_settings_index;
+			if (joystick_value_mapped > 200 && user_settings_index > SETTING_PIEZO) --user_settings_index;
 
-		ArrowTest(&dev, fx24M, CONFIG_WIDTH, CONFIG_HEIGHT);
-		//vTaskDelay(100/10);
+			lcdBacklightOn(&dev);
+			if (display_blank_now)
+			{
+				display_blank_now = false;
+				lcdFillScreen(&dev, BLACK);
+			}
+			drawSetupMenu(&dev, fx24G, &my_user_settings, user_settings_index);
+			vTaskDelay(10/portTICK_PERIOD_MS);
+			continue;
+		}
+		// Check for pairing mode
+		if (remote_in_pairing_mode)
+		{
+			lcdBacklightOn(&dev);
+			if (display_blank_now)
+			{
+				display_blank_now = false;
+				lcdFillScreen(&dev, BLACK);
+			}
+			drawScreenPairing(&dev, fx24G, CONFIG_WIDTH, CONFIG_HEIGHT);
+			vTaskDelay(10/portTICK_PERIOD_MS);
+			continue;
+		}
 
-		uint8_t command[1] = { COMM_GET_VALUES_SETUP };
-		packSendPayload(command, 1);
-		
+		// Check for functional IMU
+		//TODO: if (osrr_state.imu.error == true){}
+		if (accel_g_x == 0 && accel_g_y == 0 && accel_g_z == 0) {
+			// IMU Not functional, leave display on
+			is_display_visible = true;
+			is_remote_idle = false;
+		} else {
+			// Check if remote is idle via IMU
+			const int gyro_threshold = 1000; //TODO: define threshold
+			if (abs(gyro_x) > gyro_threshold || abs(gyro_y) > gyro_threshold || abs(gyro_z) > gyro_threshold)
+			{
+				remote_is_idle_tick = xTaskGetTickCount();
+				// Check if we were idle and reset the display values
+				if (is_remote_idle) {
+					printf("remote is moving %d, %d, %d\n", gyro_x, gyro_y, gyro_z);
+					resetPreviousValues();
+				}
+				is_remote_idle = false;
+			}
+			// Check if Gyro has been idle for more than 10 seconds
+			else if ((xTaskGetTickCount() - remote_is_idle_tick)*portTICK_RATE_MS > 10 * 1000)
+			{
+				is_remote_idle = true;
+				//NOTE: helpful sometimes.. printf("remote is idle %d, %d, %d\n", gyro_x, gyro_y, gyro_z);
+			}
+			// Check if remote is in a visible orientation
+			switch (my_user_settings.remote_model)
+			{
+				//TODO: left vs right handed values: my_user_settings.throttle_reverse ?
+				case MODEL_ALBERT:
+					if (accel_g_x > 0.7 || accel_g_z > 0.4) {
+						if ((xTaskGetTickCount() - remote_is_visible_tick)*portTICK_RATE_MS > 500) {
+							is_display_visible = false;
+						}
+					}
+					else {
+						remote_is_visible_tick = xTaskGetTickCount();
+						is_display_visible = true;
+					}
+				break;
+				case MODEL_BRUCE:
+					if (accel_g_y > 0.5 || accel_g_z > 0.3) {
+						if ((xTaskGetTickCount() - remote_is_visible_tick)*portTICK_RATE_MS > 500) {
+							is_display_visible = false;
+						}
+					}
+					else {
+						remote_is_visible_tick = xTaskGetTickCount();
+						is_display_visible = true;
+					}
+				break;
+				case MODEL_CLINT:
+					//TODO: estimated
+					if (accel_g_y > 0.5 || accel_g_x > 0.6) {
+						if ((xTaskGetTickCount() - remote_is_visible_tick)*portTICK_RATE_MS > 500) {
+							is_display_visible = false;
+						}
+					}
+					else {
+						remote_is_visible_tick = xTaskGetTickCount();
+						is_display_visible = true;
+					}
+				break;
+			}
+		}
 
+		// Switch the backlight to save power
+		if (is_remote_idle || !is_display_visible)
+		{
+			lcdBacklightOff(&dev);
+		}
+		else
+		{
+			lcdBacklightOn(&dev);
+		}
+
+		// Draw a blank screen when the remote is idle
+		if (is_remote_idle)
+		{
+			lcdFillScreen(&dev, BLACK);
+			alert_visible = false;
+		}
+		else
+		// Draw the good stuff otherwise
+		{
+			if (display_blank_now)
+			{
+				display_blank_now = false;
+				lcdFillScreen(&dev, BLACK);
+				alert_visible = false;
+				resetPreviousValues();
+			}
+			// Draw primary or secondary display
+			if (display_second_screen && !alert_visible)
+			{
+				drawScreenSecondary(&dev, fx24G, CONFIG_WIDTH, CONFIG_HEIGHT, &my_user_settings);
+			}
+			else if (is_throttle_locked && !alert_visible)
+			{
+				// Display throttle locked alert over primary screen
+				drawAlert(&dev, fx24G, RED, "Throttle", "locked", "", "Double click", "to unlock");
+				drawScreenPrimary(&dev, fx24G, CONFIG_WIDTH, CONFIG_HEIGHT, &my_user_settings);
+			}
+			else
+			{
+				drawScreenPrimary(&dev, fx24G, CONFIG_WIDTH, CONFIG_HEIGHT, &my_user_settings);
+			}
+		}
+
+		vTaskDelay(10/portTICK_PERIOD_MS);
 	}
 }
 
@@ -646,9 +1045,6 @@ void app_main(void)
 	// Minimum mpu6050 init to get uncalibrated values
 	mpu6050_init();
 	mpu6050_set_full_scale_accel_range(MPU6050_ACCEL_FULL_SCALE_RANGE_16);
-
-	//TODO: haptic fails :(
-	//haptic_test();
 
 	ESP_LOGI(TAG, "Initializing SPIFFS");
 
@@ -692,10 +1088,20 @@ void app_main(void)
         ret = nvs_flash_init();
     }
     ESP_ERROR_CHECK( ret );
-	example_wifi_init();
-	xbee_init();
 
 /* ESPNOW/Wifi */
+
+	// Grab the user settings on boot
+	ret = load_user_settings(&my_user_settings);
+	ESP_LOGI(__FUNCTION__, "Load user settings returned: %s", esp_err_to_name(ret));
+	while (ret != ESP_OK)
+	{
+		my_user_settings.settings_version = SETTINGS_VERSION;
+		my_user_settings.remote_model = MODEL_BRUCE;
+		save_user_settings(&my_user_settings);
+		ret = load_user_settings(&my_user_settings);
+	}
+	ESP_LOGI(__FUNCTION__, "Settings version=%d model=%d buzzer=%d piezo=%d fahrenheit=%d mph=%d", my_user_settings.settings_version, my_user_settings.remote_model, !my_user_settings.disable_buzzer, !my_user_settings.disable_piezo, my_user_settings.dispaly_fahrenheit, my_user_settings.display_mph);
 
 	// Display task
 	xTaskCreate(ST7789_Task, "display_task", 1024*4, NULL, 2, NULL);
@@ -704,14 +1110,14 @@ void app_main(void)
 	xTaskCreate(i2c_task, "i2c_task", 1024 * 2, NULL, 10, NULL);
 	
 	// Xbee task
-	xTaskCreate(xbee_task, "xbee_task", 1024 * 2, NULL, 10, NULL);
+	xTaskCreate(xbee_task, "xbee_task", 1024 * 4, NULL, 10, NULL);
 
 	// Piezo task
-	xTaskCreate(piezo_test, "piezo_test", 1024 * 1, NULL, 10, NULL);
+	xTaskCreate(piezo_test, "piezo_test", 1024 * 2, NULL, 10, NULL);
 
 	// Just chillin
 	while(1)
 	{
-		vTaskDelay(500/portTICK_PERIOD_MS);
+		vTaskDelay(100/portTICK_PERIOD_MS);
 	}
 }
