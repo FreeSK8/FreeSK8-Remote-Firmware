@@ -256,15 +256,18 @@ static void gpio_input_task(void* arg)
 			}
 			if ((ev.pin == GPIO_INPUT_IO_0) && (ev.event == BUTTON_DOUBLE_CLICK)) {
 				// SW3 on HW v1.2 PCB
-				melody_play(MELODY_STARTUP, true);
-				haptic_play(MELODY_STARTUP, true);
 				is_throttle_locked = !is_throttle_locked; // Toggle throttle lock
 				if (is_throttle_locked)
 				{
 					display_blank_now = true; // Clear display
 					display_second_screen = false; // Request primary screen with throttle locked
+					melody_play(MELODY_GPS_LOST, true);
+					haptic_play(MELODY_GPS_LOST, true);
+				} else {
+					display_blank_now = true; // Clear the display if we turn off throttle lock
+					melody_play(MELODY_GPS_LOCK, true);
+					haptic_play(MELODY_GPS_LOCK, true);
 				}
-				else display_blank_now = true; // Clear the display if we turn off throttle lock
 				ESP_LOGI(__FUNCTION__, "Throttle lock is %d", is_throttle_locked);
 			}
 			if ((ev.pin == GPIO_INPUT_IO_1) && (ev.event == BUTTON_DOWN)) {
