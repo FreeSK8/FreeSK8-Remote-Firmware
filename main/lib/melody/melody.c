@@ -1,4 +1,5 @@
 #include "melody.h"
+#include "esp_log.h"
 #include "driver/ledc.h"
 
 int melody_notes=0;
@@ -105,7 +106,6 @@ void melody_play(int index, bool interrupt_melody)
 			melody_wholenote = (60000 * 4) / tempo_descending;
 		break;
 		case MELODY_STARTUP:
-        printf("melody startup received\n");
 			melody = (int*)&melody_startup;
 			melody_notes=sizeof(melody_startup)/sizeof(melody_startup[0])/2;
 			melody_wholenote = (60000 * 4) / tempo_startup;
@@ -121,7 +121,7 @@ void melody_play(int index, bool interrupt_melody)
 			melody_wholenote = (60000 * 4) / tempo_gps_lost;
 		break;
 		default:
-		//TODO: add default melody
+			ESP_LOGW(__FUNCTION__,"Invalid index %d", index);
 		break;
 	}
 
@@ -145,7 +145,6 @@ void melody_step(void)
 			melody_this_note = 0;
 			is_melody_playing = false;
 			ledc_stop(LEDC_HIGH_SPEED_MODE, LEDC_CHANNEL, 0);
-			printf("end of melody\n");
 			return;
 		}
 
