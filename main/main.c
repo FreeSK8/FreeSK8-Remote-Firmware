@@ -277,8 +277,8 @@ static void gpio_input_task(void* arg)
 				// SW2 on HW v1.2 PCB
 			}
 			if ((ev.pin == GPIO_INPUT_IO_3) && (ev.event == BUTTON_HELD)) {
-				melody_play(MELODY_GPS_LOST, true);
-				haptic_play(MELODY_GPS_LOST, true);
+				melody_play(MELODY_LOG_STOP, true);
+				haptic_play(MELODY_LOG_STOP, true);
 				ESP_LOGI(__FUNCTION__, "Setting MCU_LATCH to 0");
 				/// Turn Power switch LED off
 				gpio_set_level(GPIO_OUTPUT_IO_0, 0);
