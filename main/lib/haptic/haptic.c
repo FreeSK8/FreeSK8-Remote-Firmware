@@ -2,6 +2,8 @@
 
 #include "../../esp-i2c.h"
 
+#include "esp_log.h"
+
 int haptic_notes=0;
 int haptic_wholenote = 0;
 int haptic_divider = 0;
@@ -63,21 +65,71 @@ void haptic_play(int index, bool interrupt_melody)
 	{
 		case MELODY_GOTCHI_FAULT:
 			haptic = (int*)&melody_gotchi_fault;
-			haptic_notes=sizeof(melody_gotchi_fault)/sizeof(melody_gotchi_fault[0])/2;
+			haptic_notes = sizeof(melody_gotchi_fault)/sizeof(melody_gotchi_fault[0])/2;
 			haptic_wholenote = (60000 * 4) / tempo_gotchi_fault;
+		break;
+		case MELODY_ESC_FAULT:
+			haptic = (int*)&melody_esc_fault;
+			haptic_notes = sizeof(melody_esc_fault)/sizeof(melody_esc_fault[0])/2;
+			haptic_wholenote = (60000 * 4) / tempo_esc_fault;
+		break;
+		case MELODY_BLE_FAIL:
+			haptic = (int*)&melody_ble_fail;
+			haptic_notes = sizeof(melody_ble_fail)/sizeof(melody_ble_fail[0])/2;
+			haptic_wholenote = (60000 * 4) / tempo_ble_fail;
+		break;
+		case MELODY_BLE_SUCCESS:
+			haptic = (int*)&melody_ble_success;
+			haptic_notes = sizeof(melody_ble_success)/sizeof(melody_ble_success[0])/2;
+			haptic_wholenote = (60000 * 4) / tempo_ble_success;
+		break;
+		case MELODY_STORAGE_LIMIT:
+			haptic = (int*)&melody_storage_limit;
+			haptic_notes = sizeof(melody_storage_limit)/sizeof(melody_storage_limit[0])/2;
+			haptic_wholenote = (60000 * 4) / tempo_storage_limit;
+		break;
+		case MELODY_ESC_TEMP:
+			haptic = (int*)&melody_esc_temp;
+			haptic_notes = sizeof(melody_esc_temp)/sizeof(melody_esc_temp[0])/2;
+			haptic_wholenote = (60000 * 4) / tempo_esc_temp;
+		break;
+		case MELODY_MOTOR_TEMP:
+			haptic = (int*)&melody_motor_temp;
+			haptic_notes = sizeof(melody_motor_temp)/sizeof(melody_motor_temp[0])/2;
+			haptic_wholenote = (60000 * 4) / tempo_motor_temp;
+		break;
+		case MELODY_VOLTAGE_LOW:
+			haptic = (int*)&melody_voltage_low;
+			haptic_notes = sizeof(melody_voltage_low)/sizeof(melody_voltage_low[0])/2;
+			haptic_wholenote = (60000 * 4) / tempo_voltage_low;
 		break;
 		case MELODY_LOG_START:
 			haptic = (int*)&melody_ascending;
 			haptic_notes = sizeof(melody_ascending)/sizeof(melody_ascending[0])/2;
 			haptic_wholenote = (60000 * 4) / tempo_ascending;
 		break;
+		case MELODY_LOG_STOP:
+			haptic = (int*)&melody_descending;
+			haptic_notes = sizeof(melody_descending)/sizeof(melody_descending[0])/2;
+			haptic_wholenote = (60000 * 4) / tempo_descending;
+		break;
 		case MELODY_STARTUP:
 			haptic = (int*)&melody_startup;
 			haptic_notes = sizeof(melody_startup)/sizeof(melody_startup[0])/2;
 			haptic_wholenote = (60000 * 4) / tempo_startup;
 		break;
+		case MELODY_GPS_LOCK:
+			haptic = (int*)&melody_gps_locked;
+			haptic_notes = sizeof(melody_gps_locked)/sizeof(melody_gps_locked[0])/2;
+			haptic_wholenote = (60000 * 4) / tempo_gps_locked;
+		break;
+		case MELODY_GPS_LOST:
+			haptic = (int*)&melody_gps_lost;
+			haptic_notes = sizeof(melody_gps_lost)/sizeof(melody_gps_lost[0])/2;
+			haptic_wholenote = (60000 * 4) / tempo_gps_lost;
+		break;
 		default:
-		//TODO: add default haptic
+			ESP_LOGW(__FUNCTION__,"Invalid index %d", index);
 		break;
 	}
 

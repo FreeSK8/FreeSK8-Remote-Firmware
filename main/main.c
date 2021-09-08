@@ -23,7 +23,7 @@
 
 #include "lib/haptic/haptic.h"
 
-const char * version = "0.1.0";
+const char * version = "0.1.1";
 
 int gyro_x, gyro_y, gyro_z;
 float accel_g_x, accel_g_x_delta;
@@ -256,15 +256,18 @@ static void gpio_input_task(void* arg)
 			}
 			if ((ev.pin == GPIO_INPUT_IO_0) && (ev.event == BUTTON_DOUBLE_CLICK)) {
 				// SW3 on HW v1.2 PCB
-				melody_play(MELODY_STARTUP, true);
-				haptic_play(MELODY_STARTUP, true);
 				is_throttle_locked = !is_throttle_locked; // Toggle throttle lock
 				if (is_throttle_locked)
 				{
 					display_blank_now = true; // Clear display
 					display_second_screen = false; // Request primary screen with throttle locked
+					melody_play(MELODY_GPS_LOST, true);
+					haptic_play(MELODY_GPS_LOST, true);
+				} else {
+					display_blank_now = true; // Clear the display if we turn off throttle lock
+					melody_play(MELODY_GPS_LOCK, true);
+					haptic_play(MELODY_GPS_LOCK, true);
 				}
-				else display_blank_now = true; // Clear the display if we turn off throttle lock
 				ESP_LOGI(__FUNCTION__, "Throttle lock is %d", is_throttle_locked);
 			}
 			if ((ev.pin == GPIO_INPUT_IO_1) && (ev.event == BUTTON_DOWN)) {
@@ -274,8 +277,8 @@ static void gpio_input_task(void* arg)
 				// SW2 on HW v1.2 PCB
 			}
 			if ((ev.pin == GPIO_INPUT_IO_3) && (ev.event == BUTTON_HELD)) {
-				melody_play(MELODY_GPS_LOST, true);
-				haptic_play(MELODY_GPS_LOST, true);
+				melody_play(MELODY_LOG_STOP, true);
+				haptic_play(MELODY_LOG_STOP, true);
 				ESP_LOGI(__FUNCTION__, "Setting MCU_LATCH to 0");
 				/// Turn Power switch LED off
 				gpio_set_level(GPIO_OUTPUT_IO_0, 0);
@@ -384,7 +387,7 @@ static void i2c_task(void *arg)
 				}
 				if (!gpio_usb_detect)
 				{
-					// Check if we've been idle for more than 5 seconds
+					// Check if throttle has been idle for more than 5 minutes
 					if ((xTaskGetTickCount() - startTickThrottleIdle)*portTICK_RATE_MS > 5 * 60 * 1000)
 					{
 						is_throttle_idle = true;
