@@ -387,7 +387,7 @@ static void i2c_task(void *arg)
 				}
 				if (!gpio_usb_detect)
 				{
-					// Check if we've been idle for more than 5 seconds
+					// Check if throttle has been idle for more than 5 minutes
 					if ((xTaskGetTickCount() - startTickThrottleIdle)*portTICK_RATE_MS > 5 * 60 * 1000)
 					{
 						is_throttle_idle = true;
