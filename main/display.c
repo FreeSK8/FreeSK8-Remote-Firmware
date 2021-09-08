@@ -553,10 +553,10 @@ TickType_t drawScreenSecondary(TFT_t * dev, FontxFile *fx, int width, int height
 	{
 		temp_mos_previous = esc_telemetry.temp_mos;
 		if (user_settings->dispaly_fahrenheit) {
-			esc_temp_mapped = map(CTOF(esc_telemetry.temp_mos), 25, 100, 1, 20);
+			esc_temp_mapped = map(CTOF(esc_telemetry.temp_mos), CTOF(0), CTOF(100), 1, 20);
 			display_temperature = CTOF(esc_telemetry.temp_mos);
 		} else {
-			esc_temp_mapped = map(esc_telemetry.temp_mos, 25, 100, 1, 20);
+			esc_temp_mapped = map(esc_telemetry.temp_mos, 0, 100, 1, 20);
 			display_temperature = esc_telemetry.temp_mos;
 		}
 		if (display_temperature < 0) display_temperature = 0;
@@ -581,10 +581,10 @@ TickType_t drawScreenSecondary(TFT_t * dev, FontxFile *fx, int width, int height
 	{
 		temp_motor_previous = esc_telemetry.temp_motor;
 		if (user_settings->dispaly_fahrenheit) {
-			motor_temp_mapped = map(CTOF(esc_telemetry.temp_motor), 25, 100, 1, 20);
+			motor_temp_mapped = map(CTOF(esc_telemetry.temp_motor), CTOF(0), CTOF(100), 1, 20);
 			display_temperature = CTOF(esc_telemetry.temp_motor);
 		} else {
-			motor_temp_mapped = map(esc_telemetry.temp_motor, 25, 100, 1, 20);
+			motor_temp_mapped = map(esc_telemetry.temp_motor, 0, 100, 1, 20);
 			display_temperature = esc_telemetry.temp_motor;
 		}
 		if (display_temperature < 0) display_temperature = 0;
