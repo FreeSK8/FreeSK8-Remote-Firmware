@@ -23,7 +23,7 @@
 
 #include "lib/haptic/haptic.h"
 
-const char * version = "0.1.1";
+const char * version = "0.1.2";
 
 int gyro_x, gyro_y, gyro_z;
 float accel_g_x, accel_g_x_delta;
@@ -387,11 +387,14 @@ static void i2c_task(void *arg)
 				}
 				if (!gpio_usb_detect)
 				{
-					// Check if throttle has been idle for more than 5 minutes
-					if ((xTaskGetTickCount() - startTickThrottleIdle)*portTICK_RATE_MS > 5 * 60 * 1000)
+					// Check if throttle has been idle for more than 10 minutes
+					if ((xTaskGetTickCount() - startTickThrottleIdle)*portTICK_RATE_MS > 10 * 60 * 1000)
 					{
 						is_throttle_idle = true;
 					}
+				} else {
+					// OSRR is charging
+					startTickThrottleIdle = xTaskGetTickCount(); // Reset idle throttle time
 				}
 			} else {
 				was_throttle_idle = false;
@@ -400,7 +403,9 @@ static void i2c_task(void *arg)
 		}
 		else
 		{
+			// Throttle is locked
 			joystick_value_mapped = CENTER_JOYSTICK; //NOTE: Zero input if is_throttle_locked
+			startTickThrottleIdle = xTaskGetTickCount(); // Reset idle throttle time
 		}
 
 		adc_raw_battery_level = ADS1015_readADC_SingleEnded(2);
