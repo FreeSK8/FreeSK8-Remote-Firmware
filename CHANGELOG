@@ -1,6 +1,7 @@
 v0.1.2
 
 * Reset idle throttle timer while charging
+* Low battery and idle remote alerts always play
 
 v0.1.1
 
