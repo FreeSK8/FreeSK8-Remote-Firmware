@@ -121,12 +121,16 @@ static void piezo_test(void *arg)
 	TickType_t startTick = xTaskGetTickCount();
 	TickType_t endTick, diffTick;
 	bool was_remote_idle = false;
+	bool alert_low_battery = false;
     while (1) {
 		// Low Battery Alert
 		if (adc_raw_battery_level < 525 || adc_raw_battery_level == ADS1015_ERROR) //TODO: Don't hardcode 525 as minimum battery value
 		{
+			alert_low_battery = true; // Override user preference to be sure alert is played
 			melody_play(MELODY_GOTCHI_FAULT, false);
 			//NOTE: No Haptics PLEASE
+		} else {
+			alert_low_battery = false; // Clear override
 		}
 		// Idle Throttle Alert
 		if (is_throttle_idle) {
@@ -158,7 +162,10 @@ static void piezo_test(void *arg)
 			was_remote_idle = false;
 		}
 
-		if (!my_user_settings.disable_piezo) melody_step();
+		// Play melody if enabled
+		//             or when battery is low
+		//             or when remote is left unattended
+		if (!my_user_settings.disable_piezo || alert_low_battery || is_remote_idle) melody_step();
 		
 		vTaskDelay(10/portTICK_PERIOD_MS);
     }
