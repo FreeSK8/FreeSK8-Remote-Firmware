@@ -358,7 +358,7 @@ static void i2c_task(void *arg)
 		if (!is_throttle_locked && adc_raw_joystick != ADS1015_ERROR)
 		{
 			// Map throttle, checking for reversed user setting
-			if (my_user_settings.throttle_reverse) joystick_value_mapped = 255 - map(adc_raw_joystick, 2, 1632, 0, 255);
+			if (my_user_settings.throttle_reverse) joystick_value_mapped = 255 - map(adc_raw_joystick, 0, 1700, 0, 255);
 			else joystick_value_mapped = map(adc_raw_joystick, 0, 1700, 0, 255);
 
 			// On first read only
