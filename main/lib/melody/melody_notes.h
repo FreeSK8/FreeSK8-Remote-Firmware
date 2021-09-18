@@ -113,7 +113,7 @@ extern const int melody_gotchi_fault[226];
 extern const int tempo_gotchi_fault;
 extern const int melody_esc_fault[10];
 extern const int tempo_esc_fault;
-extern const int melody_ble_fail[6];
+extern const int melody_ble_fail[12];
 extern const int tempo_ble_fail;
 extern const int melody_ble_success[6];
 extern const int tempo_ble_success;
