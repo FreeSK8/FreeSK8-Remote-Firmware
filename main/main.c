@@ -25,6 +25,8 @@
 
 const char * version = "0.1.2";
 
+#define ADC_BATTERY_MIN 525
+
 int gyro_x, gyro_y, gyro_z;
 float accel_g_x, accel_g_x_delta;
 float accel_g_y, accel_g_y_delta;
@@ -116,25 +118,23 @@ static void piezo_test(void *arg)
     // Initialize fade service.
     ledc_fade_func_install(0);
 
-	melody_play(MELODY_LOG_START, true);
+	if (!my_user_settings.disable_piezo) melody_play(MELODY_LOG_START, true);
 	haptic_play(MELODY_LOG_START, true);
 	TickType_t startTick = xTaskGetTickCount();
 	TickType_t endTick, diffTick;
 	bool was_remote_idle = false;
-	bool alert_low_battery = false;
+
     while (1) {
 		// Low Battery Alert
-		if (adc_raw_battery_level < 525 || adc_raw_battery_level == ADS1015_ERROR) //TODO: Don't hardcode 525 as minimum battery value
+		if (adc_raw_battery_level < ADC_BATTERY_MIN || adc_raw_battery_level == ADS1015_ERROR)
 		{
-			alert_low_battery = true; // Override user preference to be sure alert is played
-			melody_play(MELODY_GOTCHI_FAULT, false);
+			melody_play(MELODY_GOTCHI_FAULT, false); //NOTE: disregard user preference
 			//NOTE: No Haptics PLEASE
-		} else {
-			alert_low_battery = false; // Clear override
 		}
+
 		// Idle Throttle Alert
 		if (is_throttle_idle) {
-			melody_play(MELODY_ESC_FAULT, false);
+			melody_play(MELODY_BLE_FAIL, false); //NOTE: disregard user preference
 			//NOTE: No Haptics
 		}
 
@@ -153,7 +153,7 @@ static void piezo_test(void *arg)
 				diffTick = endTick - startTick;
 				if (diffTick*portTICK_RATE_MS > 5 * 60 * 1000)
 				{
-					melody_play(MELODY_ESC_FAULT, false);
+					if (!my_user_settings.disable_piezo) melody_play(MELODY_ESC_FAULT, false);
 				}
 			}
 		}
@@ -165,7 +165,7 @@ static void piezo_test(void *arg)
 		// Play melody if enabled
 		//             or when battery is low
 		//             or when remote is left unattended
-		if (!my_user_settings.disable_piezo || alert_low_battery || is_remote_idle) melody_step();
+		melody_step();
 		
 		vTaskDelay(10/portTICK_PERIOD_MS);
     }
@@ -268,11 +268,11 @@ static void gpio_input_task(void* arg)
 				{
 					display_blank_now = true; // Clear display
 					display_second_screen = false; // Request primary screen with throttle locked
-					melody_play(MELODY_GPS_LOST, true);
+					if (!my_user_settings.disable_piezo) melody_play(MELODY_GPS_LOST, true);
 					haptic_play(MELODY_GPS_LOST, true);
 				} else {
 					display_blank_now = true; // Clear the display if we turn off throttle lock
-					melody_play(MELODY_GPS_LOCK, true);
+					if (!my_user_settings.disable_piezo) melody_play(MELODY_GPS_LOCK, true);
 					haptic_play(MELODY_GPS_LOCK, true);
 				}
 				ESP_LOGI(__FUNCTION__, "Throttle lock is %d", is_throttle_locked);
@@ -284,7 +284,7 @@ static void gpio_input_task(void* arg)
 				// SW2 on HW v1.2 PCB
 			}
 			if ((ev.pin == GPIO_INPUT_IO_3) && (ev.event == BUTTON_HELD)) {
-				melody_play(MELODY_LOG_STOP, true);
+				if (!my_user_settings.disable_piezo) melody_play(MELODY_LOG_STOP, true);
 				haptic_play(MELODY_LOG_STOP, true);
 				ESP_LOGI(__FUNCTION__, "Setting MCU_LATCH to 0");
 				/// Turn Power switch LED off
@@ -333,7 +333,7 @@ static void gpio_init_remote()
 
 uint16_t adc_raw_joystick;
 uint16_t adc_raw_joystick_2;
-uint16_t adc_raw_battery_level;
+uint16_t adc_raw_battery_level = ADC_BATTERY_MIN;
 uint16_t adc_raw_rssi;
 #define JOYSTICK_OFF_CENTER 7
 #define CENTER_JOYSTICK 127
@@ -354,6 +354,8 @@ static void i2c_task(void *arg)
 
 	bool was_throttle_idle = false;
 	TickType_t startTickThrottleIdle = xTaskGetTickCount();
+
+	bool was_throttle_locked = false;
 
 	ADS1015_init();
 	while(1)
@@ -384,35 +386,42 @@ static void i2c_task(void *arg)
 					is_throttle_locked = true;
 				}
 			}
-			// Check if joystick is center to determine if it's in use
-			if (joystick_value_mapped > CENTER_JOYSTICK - JOYSTICK_OFF_CENTER && joystick_value_mapped < CENTER_JOYSTICK + JOYSTICK_OFF_CENTER)
-			{
-				if (!was_throttle_idle)
-				{
-					was_throttle_idle = true;
-					startTickThrottleIdle = xTaskGetTickCount();
-				}
-				if (!gpio_usb_detect)
-				{
-					// Check if throttle has been idle for more than 10 minutes
-					if ((xTaskGetTickCount() - startTickThrottleIdle)*portTICK_RATE_MS > 10 * 60 * 1000)
-					{
-						is_throttle_idle = true;
-					}
-				} else {
-					// OSRR is charging
-					startTickThrottleIdle = xTaskGetTickCount(); // Reset idle throttle time
-				}
-			} else {
-				was_throttle_idle = false;
-				is_throttle_idle = false;
+
+			// Check if throttle was locked so we can reset the idle throttle time
+			if (was_throttle_locked) {
+				was_throttle_locked = false;
+				startTickThrottleIdle = xTaskGetTickCount(); // Reset idle throttle time
 			}
 		}
 		else
 		{
 			// Throttle is locked
 			joystick_value_mapped = CENTER_JOYSTICK; //NOTE: Zero input if is_throttle_locked
-			startTickThrottleIdle = xTaskGetTickCount(); // Reset idle throttle time
+			was_throttle_locked = true;
+		}
+
+		// Check if joystick is center to determine if it's in use
+		if (joystick_value_mapped > CENTER_JOYSTICK - JOYSTICK_OFF_CENTER && joystick_value_mapped < CENTER_JOYSTICK + JOYSTICK_OFF_CENTER)
+		{
+			if (!was_throttle_idle)
+			{
+				was_throttle_idle = true;
+				startTickThrottleIdle = xTaskGetTickCount();
+			}
+			if (!gpio_usb_detect)
+			{
+				// Check if throttle has been idle for more than 10 minutes
+				if ((xTaskGetTickCount() - startTickThrottleIdle)*portTICK_RATE_MS > 10 * 60 * 1000)
+				{
+					is_throttle_idle = true;
+				}
+			} else {
+				// OSRR is charging
+				startTickThrottleIdle = xTaskGetTickCount(); // Reset idle throttle time
+			}
+		} else {
+			was_throttle_idle = false;
+			is_throttle_idle = false;
 		}
 
 		adc_raw_battery_level = ADS1015_readADC_SingleEnded(2);
@@ -499,7 +508,7 @@ void process_packet_vesc(unsigned char *data, unsigned int len) {
 				display_blank_now = true;
 				display_second_screen = false;
 			}
-			melody_play(MELODY_ESC_FAULT, false);
+			if (!my_user_settings.disable_piezo) melody_play(MELODY_ESC_FAULT, false);
 			haptic_play(MELODY_ESC_FAULT, false);
 		}
 		ESP_LOGI(__FUNCTION__, "Temp ESC %f Motor %f, Current In %f Out %f, Speed %f, Voltage %f Fault %d ESCs %d", esc_telemetry.temp_mos, esc_telemetry.temp_motor, esc_telemetry.current_in, esc_telemetry.current_motor, esc_telemetry.speed, esc_telemetry.v_in, esc_telemetry.fault_code, esc_telemetry.num_vescs);
@@ -723,7 +732,7 @@ static void xbee_task(void *arg)
 				display_blank_now = true;
 				sprintf(str_pairing_3, "Pairing was");
 				sprintf(str_pairing_4, "Successful");
-				melody_play(MELODY_BLE_SUCCESS, true);
+				if (!my_user_settings.disable_piezo) melody_play(MELODY_BLE_SUCCESS, true);
 				haptic_play(MELODY_BLE_SUCCESS, true);
 				vTaskDelay(3000/portTICK_PERIOD_MS); // Wait a few seconds
 			}
@@ -732,7 +741,7 @@ static void xbee_task(void *arg)
 				display_blank_now = true;
 				sprintf(str_pairing_3, "Pairing");
 				sprintf(str_pairing_4, "FAILED");
-				melody_play(MELODY_BLE_FAIL, true);
+				if (!my_user_settings.disable_piezo) melody_play(MELODY_BLE_FAIL, true);
 				haptic_play(MELODY_BLE_FAIL, true);
 				vTaskDelay(10000/portTICK_PERIOD_MS);
 			}
