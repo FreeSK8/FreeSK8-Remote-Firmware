@@ -36,7 +36,7 @@ const int melody_esc_fault[] = {
 const int tempo_esc_fault = 100;
 
 const int melody_ble_fail[] = {
-   NOTE_C2,4, NOTE_C2,4, NOTE_B2,4
+   NOTE_C2,4, NOTE_C2,4, NOTE_B2,4, REST,2, REST,2, REST,2
 };
 const int tempo_ble_fail = 360;
 
