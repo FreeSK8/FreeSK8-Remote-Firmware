@@ -40,6 +40,7 @@ bool is_throttle_idle = false;
 bool is_throttle_locked = false;
 
 TickType_t esc_last_responded = 0;
+TickType_t startTickThrottleIdle = 0;
 
 /* User Settings */
 #include "user-settings.h"
@@ -153,7 +154,7 @@ static void piezo_test(void *arg)
 				diffTick = endTick - startTick;
 				if (diffTick*portTICK_RATE_MS > 5 * 60 * 1000)
 				{
-					if (!my_user_settings.disable_piezo) melody_play(MELODY_ESC_FAULT, false);
+					if (!my_user_settings.disable_piezo) melody_play(MELODY_BLE_FAIL, false);
 				}
 			}
 		}
@@ -220,6 +221,10 @@ static void gpio_input_task(void* arg)
 
 	while (true) {
 		if (xQueueReceive(button_events, &ev, 1000/portTICK_PERIOD_MS)) {
+			if ((ev.pin == GPIO_INPUT_IO_0)) {
+				// Reset idle throttle time with user button
+				startTickThrottleIdle = xTaskGetTickCount();
+			}
 			if ((ev.pin == GPIO_INPUT_IO_0) && (ev.event == BUTTON_DOWN)) {
 				// User Button (SW3 on HW v1.2 PCB)
 				if (remote_in_setup_mode)
@@ -353,7 +358,7 @@ static void i2c_task(void *arg)
 	float accel_res = mpu6050_get_accel_res(range);
 
 	bool was_throttle_idle = false;
-	TickType_t startTickThrottleIdle = xTaskGetTickCount();
+	startTickThrottleIdle = xTaskGetTickCount();
 
 	bool was_throttle_locked = false;
 
@@ -414,6 +419,8 @@ static void i2c_task(void *arg)
 				if ((xTaskGetTickCount() - startTickThrottleIdle)*portTICK_RATE_MS > 10 * 60 * 1000)
 				{
 					is_throttle_idle = true;
+				} else {
+					is_throttle_idle = false;
 				}
 			} else {
 				// OSRR is charging
