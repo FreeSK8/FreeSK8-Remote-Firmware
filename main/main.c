@@ -23,7 +23,7 @@
 
 #include "lib/haptic/haptic.h"
 
-const char * version = "0.1.2";
+const char * version = "0.2.0";
 
 #define ADC_BATTERY_MIN 525
 
@@ -248,6 +248,9 @@ static void gpio_input_task(void* arg)
 						break;
 						case SETTING_MODEL:
 							if (++my_user_settings.remote_model > MODEL_CLINT) my_user_settings.remote_model = MODEL_ALBERT;
+						break;
+						case SETTING_LEFTY:
+							my_user_settings.left_handed = !my_user_settings.left_handed;
 						break;
 					}
 					save_user_settings(&my_user_settings);
@@ -910,7 +913,7 @@ void ST7789_Task(void *pvParameters)
 		if (remote_in_setup_mode)
 		{
 			// Move settings selection up and down
-			if (joystick_value_mapped < 55 && user_settings_index < SETTING_MODEL) ++user_settings_index;
+			if (joystick_value_mapped < 55 && user_settings_index < SETTING_LEFTY) ++user_settings_index;
 			if (joystick_value_mapped > 200 && user_settings_index > SETTING_PIEZO) --user_settings_index;
 
 			lcdBacklightOn(&dev);
@@ -965,9 +968,10 @@ void ST7789_Task(void *pvParameters)
 			// Check if remote is in a visible orientation
 			switch (my_user_settings.remote_model)
 			{
-				//TODO: left vs right handed values: my_user_settings.throttle_reverse ?
 				case MODEL_ALBERT:
-					if (accel_g_x > 0.7 || accel_g_z > 0.4) {
+					if ( (!my_user_settings.left_handed && (accel_g_x > 0.7 || accel_g_z > 0.4)) ||
+						 (my_user_settings.left_handed && (accel_g_x < -0.7 || accel_g_z > 0.4))
+					) {
 						if ((xTaskGetTickCount() - remote_is_visible_tick)*portTICK_RATE_MS > 500) {
 							is_display_visible = false;
 						}
@@ -978,6 +982,7 @@ void ST7789_Task(void *pvParameters)
 					}
 				break;
 				case MODEL_BRUCE:
+					//NOTE: Left and Right handed is the same
 					if (accel_g_y > 0.5 || accel_g_z > 0.3) {
 						if ((xTaskGetTickCount() - remote_is_visible_tick)*portTICK_RATE_MS > 500) {
 							is_display_visible = false;
@@ -989,7 +994,7 @@ void ST7789_Task(void *pvParameters)
 					}
 				break;
 				case MODEL_CLINT:
-					//TODO: estimated
+					//TODO: estimated values. Left handed not coded
 					if (accel_g_y > 0.5 || accel_g_x > 0.6) {
 						if ((xTaskGetTickCount() - remote_is_visible_tick)*portTICK_RATE_MS > 500) {
 							is_display_visible = false;

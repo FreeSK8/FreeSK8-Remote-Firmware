@@ -883,6 +883,7 @@ TickType_t drawSetupMenu(TFT_t * dev, FontxFile *fx, user_settings_t *user_setti
 	static bool first_draw = true;
 	static uint8_t previous_index = 255;
 	static user_settings_t previous_settings;
+	static const uint8_t y_line_height = 25;
 
 	TickType_t startTick, endTick, diffTick;
 	startTick = xTaskGetTickCount();
@@ -899,13 +900,16 @@ TickType_t drawSetupMenu(TFT_t * dev, FontxFile *fx, user_settings_t *user_setti
 	{
 		lcdSetFontFill(dev, BLACK);
 		lcdSetFontDirection(dev, DIRECTION0);
+		/* TODO: No room to draw "OSRR Setup"
 		sprintf((char *)ascii, "Setup");
 		ypos = 15;
 		xpos = (width - (strlen((char *)ascii) * 8 * fontWidth)) / 2;
 		color = YELLOW;
 		lcdDrawString2(dev, fontHeight, fontWidth, xpos, ypos, ascii, color);
+		*/
 	}
 
+	ypos = 42;
 	if (previous_index != current_index || memcmp(&previous_settings, user_settings, sizeof(user_settings_t)) != 0 )
 	{
 		// Get font size
@@ -917,55 +921,55 @@ TickType_t drawSetupMenu(TFT_t * dev, FontxFile *fx, user_settings_t *user_setti
 			else color = GRAY;
 			if (user_settings->disable_piezo) sprintf((char *)ascii, "Piezo: OFF");
 			else sprintf((char *)ascii, " Piezo: ON ");
-			ypos = 75;
-			xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
+			xpos = x_offset + (width - (strlen((char *)ascii) * fontWidth)) / 2;
 			lcdDrawString(dev, fx, xpos, ypos, ascii, color);
 		}
 
+		ypos += y_line_height;
 		if (current_index == SETTING_BUZZER || previous_index == SETTING_BUZZER || first_draw)
 		{
 			if (current_index == SETTING_BUZZER) color = WHITE;
 			else color = GRAY;
-			if (user_settings->disable_buzzer) sprintf((char *)ascii, "Buzzer: OFF");
-			else sprintf((char *)ascii, " Buzzer: ON ");
-			ypos = 100;
-			xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
+			if (user_settings->disable_buzzer) sprintf((char *)ascii, "Haptic: OFF");
+			else sprintf((char *)ascii, " Haptic: ON ");
+			xpos = x_offset + (width - (strlen((char *)ascii) * fontWidth)) / 2;
 			lcdDrawString(dev, fx, xpos, ypos, ascii, color);
 		}
 
+		ypos += y_line_height;
 		if (current_index == SETTING_SPEED || previous_index == SETTING_SPEED || first_draw)
 		{
 			if (current_index == SETTING_SPEED) color = WHITE;
 			else color = GRAY;
 			if (user_settings->display_mph) sprintf((char *)ascii, " Speed: MPH ");
 			else sprintf((char *)ascii, " Speed: KPH ");
-			ypos = 125;
-			xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
+			xpos = x_offset + (width - (strlen((char *)ascii) * fontWidth)) / 2;
 			lcdDrawString(dev, fx, xpos, ypos, ascii, color);
 		}
 
+		ypos += y_line_height;
 		if (current_index == SETTING_TEMP || previous_index == SETTING_TEMP || first_draw)
 		{
 			if (current_index == SETTING_TEMP) color = WHITE;
 			else color = GRAY;
 			if (user_settings->dispaly_fahrenheit) sprintf((char *)ascii, "Temp: Fahrenheit");
 			else sprintf((char *)ascii, "  Temp: Celsius  ");
-			ypos = 150;
-			xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
+			xpos = x_offset + (width - (strlen((char *)ascii) * fontWidth)) / 2;
 			lcdDrawString(dev, fx, xpos, ypos, ascii, color);
 		}
 
+		ypos += y_line_height;
 		if (current_index == SETTING_THROTTLE || previous_index == SETTING_THROTTLE || first_draw)
 		{
 			if (current_index == SETTING_THROTTLE) color = WHITE;
 			else color = GRAY;
 			if (user_settings->throttle_reverse) sprintf((char *)ascii, " Throttle: Reverse ");
 			else sprintf((char *)ascii, " Throttle: Forward ");
-			ypos = 175;
-			xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
+			xpos = x_offset + (width - (strlen((char *)ascii) * fontWidth)) / 2;
 			lcdDrawString(dev, fx, xpos, ypos, ascii, color);
 		}
 
+		ypos += y_line_height;
 		if (current_index == SETTING_MODEL || previous_index == SETTING_MODEL || first_draw)
 		{
 			if (current_index == SETTING_MODEL) color = WHITE;
@@ -984,8 +988,18 @@ TickType_t drawSetupMenu(TFT_t * dev, FontxFile *fx, user_settings_t *user_setti
 					sprintf((char *)ascii, " Model: Clint ");
 					break;
 			}
-			ypos = 200;
-			xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
+			xpos = x_offset + (width - (strlen((char *)ascii) * fontWidth)) / 2;
+			lcdDrawString(dev, fx, xpos, ypos, ascii, color);
+		}
+
+		ypos += y_line_height;
+		if (current_index == SETTING_LEFTY || previous_index == SETTING_LEFTY || first_draw)
+		{
+			if (current_index == SETTING_LEFTY) color = WHITE;
+			else color = GRAY;
+			if (user_settings->left_handed) sprintf((char *)ascii, " Lefty: True ");
+			else sprintf((char *)ascii, " Lefty: False ");
+			xpos = x_offset + (width - (strlen((char *)ascii) * fontWidth)) / 2;
 			lcdDrawString(dev, fx, xpos, ypos, ascii, color);
 		}
 
