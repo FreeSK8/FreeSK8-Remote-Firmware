@@ -28,9 +28,9 @@ const char * version = "0.2.0";
 #define ADC_BATTERY_MIN 525
 
 int gyro_x, gyro_y, gyro_z;
-float accel_g_x, accel_g_x_delta;
-float accel_g_y, accel_g_y_delta;
-float accel_g_z, accel_g_z_delta;
+float accel_g_x;
+float accel_g_y;
+float accel_g_z;
 
 bool is_remote_idle = true; //NOTE: Controlled by IMU
 bool display_second_screen = false;
@@ -446,12 +446,14 @@ static void i2c_task(void *arg)
 		float accel_gy = (float) accel.accel_y * accel_res - accel_bias[1];
 		float accel_gz = (float) accel.accel_z * accel_res - accel_bias[2];
 
-		accel_g_x_delta = accel_g_x - accel_gx;
-		accel_g_y_delta = accel_g_y - accel_gy;
-		accel_g_z_delta = accel_g_z - accel_gz;
-		accel_g_x = (0.2 * accel_gx) + (0.8 * accel_g_x);
-		accel_g_y = (0.2 * accel_gy) + (0.8 * accel_g_y);
-		accel_g_z = (0.2 * accel_gz) + (0.8 * accel_g_z);
+		// Filter accelerometer
+		double acceleration = sqrt(pow(accel_gx, 2) + pow(accel_gy, 2) + pow(accel_gz, 2));
+		if (acceleration > 0.9 && acceleration < 1.15) {
+			// Smooth accelerometer readings
+			accel_g_x = (0.2 * accel_gx) + (0.8 * accel_g_x);
+			accel_g_y = (0.2 * accel_gy) + (0.8 * accel_g_y);
+			accel_g_z = (0.2 * accel_gz) + (0.8 * accel_g_z);
+		}
 
 		gyro_x = gyro.gyro_x;
 		gyro_y = gyro.gyro_y;
