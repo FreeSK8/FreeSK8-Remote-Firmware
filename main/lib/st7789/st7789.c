@@ -246,6 +246,8 @@ void lcdInit(TFT_t * dev, int width, int height, int offsetx, int offsety)
 	spi_master_write_command(dev, 0x13);	//Normal Display Mode On
 	delayMS(10);
 
+	lcdFillScreen(&dev, BLACK);				//Write full screen of black
+
 	spi_master_write_command(dev, 0x29);	//Display ON
 	delayMS(255);
 
