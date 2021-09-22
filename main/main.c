@@ -897,14 +897,15 @@ void ST7789_Task(void *pvParameters)
 
 	// FreeSK8 Logo
 	lcdFillScreen(&dev, BLACK);
-	drawFirmwareVersion(&dev, (char *)version);
 	if (remote_in_pairing_mode) {
 		drawJPEG(&dev, (char*)"/spiffs/logo_badge_pairing.jpg", 206, 179, 17, 63);
 	} else {
 		drawJPEG(&dev, (char*)"/spiffs/logo_badge.jpg", 206, 114, 17, 63);
 	}
+	drawFirmwareVersion(&dev, (char *)version);
+	lcdUpdate(&dev);
 
-	vTaskDelay(1000/portTICK_PERIOD_MS);
+	vTaskDelay(2000/portTICK_PERIOD_MS);
 	lcdFillScreen(&dev, BLACK);
 
 	bool is_display_visible = true;

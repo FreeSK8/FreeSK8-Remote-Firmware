@@ -479,6 +479,8 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height, 
 		drawCircularGauge(dev, x_offset + 120, 110, 100, 5, 90, 270, esc_telemetry.battery_level * 100, BLUE, RED);
 	}
 
+	lcdUpdate(dev);
+
 	endTick = xTaskGetTickCount();
 	diffTick = endTick - startTick;
 	//ESP_LOGI(__FUNCTION__, "elapsed time[ms]:%d",diffTick*portTICK_RATE_MS);
@@ -681,6 +683,8 @@ TickType_t drawScreenSecondary(TFT_t * dev, FontxFile *fx, int width, int height
 		drawCircularGauge(dev, x_offset + 120, 110, 100, 5, 90, 270, esc_telemetry.battery_level * 100, BLUE, RED);
 	}
 
+	lcdUpdate(dev);
+
 	endTick = xTaskGetTickCount();
 	diffTick = endTick - startTick;
 	//ESP_LOGI(__FUNCTION__, "elapsed time[ms]:%d",diffTick*portTICK_RATE_MS);
@@ -802,6 +806,8 @@ TickType_t drawScreenPairing(TFT_t * dev, FontxFile *fx, int width, int height) 
 	ypos = 185;
 	xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
 	lcdDrawString(dev, fx, xpos, ypos, ascii, color);
+
+	lcdUpdate(dev);
 
 	endTick = xTaskGetTickCount();
 	diffTick = endTick - startTick;
@@ -1010,6 +1016,8 @@ TickType_t drawSetupMenu(TFT_t * dev, FontxFile *fx, user_settings_t *user_setti
 
 	// First draw only happens once
 	first_draw = false;
+
+	lcdUpdate(dev);
 
 	endTick = xTaskGetTickCount();
 	diffTick = endTick - startTick;

@@ -86,5 +86,7 @@ void lcdFillArc3(TFT_t * dev, int x, int y, int start_angle, int seg_count, int 
 int lcdDrawString2(TFT_t * dev, uint8_t sizeht , uint8_t sizew, uint16_t x, uint16_t y, uint8_t * ascii, uint16_t color);
 int lcdDrawString3(TFT_t * dev, uint8_t sizeht , uint8_t sizew, uint16_t x, uint16_t y, uint8_t * ascii, uint16_t color);
 
+void lcdUpdate(TFT_t * dev);
+
 #endif /* MAIN_ST7789_H_ */
 

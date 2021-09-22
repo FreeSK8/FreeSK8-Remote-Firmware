@@ -41,6 +41,7 @@ static const int SPI_Data_Mode = 1;
 static const int SPI_Frequency = SPI_MASTER_FREQ_40M;
 //static const int SPI_Frequency = SPI_MASTER_FREQ_80M;
 
+static uint16_t _frame_buffer[240*240] = {BLACK};
 
 void spi_master_init(TFT_t * dev, int16_t GPIO_MOSI, int16_t GPIO_SCLK, int16_t GPIO_CS, int16_t GPIO_DC, int16_t GPIO_RESET, int16_t GPIO_BL)
 {
@@ -246,7 +247,8 @@ void lcdInit(TFT_t * dev, int width, int height, int offsetx, int offsety)
 	spi_master_write_command(dev, 0x13);	//Normal Display Mode On
 	delayMS(10);
 
-	lcdFillScreen(&dev, BLACK);				//Write full screen of black
+	lcdFillScreen(dev, BLACK);				//Write full screen of black
+	lcdUpdate(dev);
 
 	spi_master_write_command(dev, 0x29);	//Display ON
 	delayMS(255);
@@ -268,12 +270,7 @@ void lcdDrawPixel(TFT_t * dev, uint16_t x, uint16_t y, uint16_t color){
 	uint16_t _x = x + dev->_offsetx;
 	uint16_t _y = y + dev->_offsety;
 
-	spi_master_write_command(dev, 0x2A);	// set column(x) address
-	spi_master_write_addr(dev, _x, _x);
-	spi_master_write_command(dev, 0x2B);	// set Page(y) address
-	spi_master_write_addr(dev, _y, _y);
-	spi_master_write_command(dev, 0x2C);	//	Memory Write
-	spi_master_write_data_word(dev, color);
+	_frame_buffer[_x + (_y * 240)] = color; // Update frame buffer at pixel location
 }
 
 
@@ -287,16 +284,12 @@ void lcdDrawMultiPixels(TFT_t * dev, uint16_t x, uint16_t y, uint16_t size, uint
 	if (y >= dev->_height) return;
 
 	uint16_t _x1 = x + dev->_offsetx;
-	uint16_t _x2 = _x1 + size;
 	uint16_t _y1 = y + dev->_offsety;
-	uint16_t _y2 = _y1;
 
-	spi_master_write_command(dev, 0x2A);	// set column(x) address
-	spi_master_write_addr(dev, _x1, _x2);
-	spi_master_write_command(dev, 0x2B);	// set Page(y) address
-	spi_master_write_addr(dev, _y1, _y2);
-	spi_master_write_command(dev, 0x2C);	//	Memory Write
-	spi_master_write_colors(dev, colors, size);
+	//TODO: Fill memory faster
+	for (int i=0; i<size; ++i) {
+		_frame_buffer[_x1 + (_y1 * 240) + i] = colors[i];
+	}
 }
 
 // Draw rectangle of filling
@@ -316,21 +309,15 @@ void lcdDrawFillRect(TFT_t * dev, uint16_t x1, uint16_t y1, uint16_t x2, uint16_
 	uint16_t _x2 = x2 + dev->_offsetx;
 	uint16_t _y1 = y1 + dev->_offsety;
 	uint16_t _y2 = y2 + dev->_offsety;
+	uint16_t size = _y2 -_y1 + 1;
 
-	spi_master_write_command(dev, 0x2A);	// set column(x) address
-	spi_master_write_addr(dev, _x1, _x2);
-	spi_master_write_command(dev, 0x2B);	// set Page(y) address
-	spi_master_write_addr(dev, _y1, _y2);
-	spi_master_write_command(dev, 0x2C);	//	Memory Write
 	for(int i=_x1;i<=_x2;i++){
-		uint16_t size = _y2-_y1+1;
-		spi_master_write_color(dev, color, size);
-#if 0
-		for(j=y1;j<=y2;j++){
-			//ESP_LOGD(TAG,"i=%d j=%d",i,j);
-			spi_master_write_data_word(dev, color);
+		//TODO: Fill memory faster
+		for (int j=_y1; j<_y2+1; ++j) {
+			for (int k=0; k<size; ++k) {
+				_frame_buffer[i + (j * 240) + k] = color;
+			}
 		}
-#endif
 	}
 }
 
@@ -347,7 +334,10 @@ void lcdDisplayOn(TFT_t * dev) {
 // Fill screen
 // color:color
 void lcdFillScreen(TFT_t * dev, uint16_t color) {
-	lcdDrawFillRect(dev, 0, 0, dev->_width-1, dev->_height-1, color);
+	//TODO: Fill memory faster
+	for (int i=0; i<(240*240); ++i) {
+		_frame_buffer[i] = color;
+	}
 }
 
 // Draw line
@@ -1565,5 +1555,28 @@ void lcdFillArc2(TFT_t * dev, int x, int y, int start_angle, int seg_count, int 
 		y0 = y2;
 		x1 = x3;
 		y1 = y3;
+	}
+}
+
+void line_test(TFT_t * dev, uint16_t x, uint16_t y, uint16_t size, uint16_t * colors) {
+	if (x+size > dev->_width) return;
+	if (y >= dev->_height) return;
+
+	uint16_t _x1 = x + dev->_offsetx;
+	uint16_t _x2 = _x1 + size;
+	uint16_t _y1 = y + dev->_offsety;
+	uint16_t _y2 = _y1;
+
+	spi_master_write_command(dev, 0x2A);	// set column(x) address
+	spi_master_write_addr(dev, _x1, _x2);
+	spi_master_write_command(dev, 0x2B);	// set Page(y) address
+	spi_master_write_addr(dev, _y1, _y2);
+	spi_master_write_command(dev, 0x2C);	//	Memory Write
+	spi_master_write_colors(dev, colors, size);
+}
+
+void lcdUpdate(TFT_t * dev) {
+	for (int i=0; i<240; ++i) {
+		line_test(dev, 0, i, 240, &_frame_buffer[i*240]);
 	}
 }
