@@ -898,9 +898,11 @@ void ST7789_Task(void *pvParameters)
 	// FreeSK8 Logo
 	lcdFillScreen(&dev, BLACK);
 	if (remote_in_pairing_mode) {
-		drawJPEG(&dev, (char*)"/spiffs/logo_badge_pairing.jpg", 206, 179, 17, 63);
+		drawJPEG(&dev, (char*)"/spiffs/pear.jpg", 92, 110, 74, 65);
+	} else if (remote_in_setup_mode) {
+		drawJPEG(&dev, (char*)"/spiffs/gear.jpg", 110, 110, 65, 65);
 	} else {
-		drawJPEG(&dev, (char*)"/spiffs/logo_badge.jpg", 206, 114, 17, 63);
+		drawJPEG(&dev, (char*)"/spiffs/freesk8.jpg", 114, 82, 63, 79);
 	}
 	drawFirmwareVersion(&dev, (char *)version);
 	lcdUpdate(&dev);
