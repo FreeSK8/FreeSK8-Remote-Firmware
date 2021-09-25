@@ -247,7 +247,7 @@ static void gpio_input_task(void* arg)
 							my_user_settings.throttle_reverse = !my_user_settings.throttle_reverse;
 						break;
 						case SETTING_MODEL:
-							if (++my_user_settings.remote_model > MODEL_CLINT) my_user_settings.remote_model = MODEL_ALBERT;
+							if (++my_user_settings.remote_model > MODEL_CUSTOM) my_user_settings.remote_model = MODEL_ALBERT;
 						break;
 						case SETTING_LEFTY:
 							my_user_settings.left_handed = !my_user_settings.left_handed;
@@ -888,7 +888,19 @@ void ST7789_Task(void *pvParameters)
 	
 	TFT_t dev;
 	spi_master_init(&dev, CONFIG_MOSI_GPIO, CONFIG_SCLK_GPIO, CONFIG_CS_GPIO, CONFIG_DC_GPIO, CONFIG_RESET_GPIO, CONFIG_BL_GPIO);
-	lcdInit(&dev, CONFIG_WIDTH, CONFIG_HEIGHT, CONFIG_OFFSETX, CONFIG_OFFSETY);
+	int8_t x_offset = 0;
+	switch (my_user_settings.remote_model) {
+		case MODEL_ALBERT:
+			x_offset = -5;
+		break;
+		case MODEL_BRUCE:
+			x_offset = -2;
+		break;
+		case MODEL_CUSTOM:
+			x_offset = 0;
+		break;
+	}
+	lcdInit(&dev, CONFIG_WIDTH, CONFIG_HEIGHT, x_offset, CONFIG_OFFSETY);
 
 #if CONFIG_INVERSION
 	ESP_LOGI(TAG, "Enable Display Inversion");
@@ -1001,6 +1013,19 @@ void ST7789_Task(void *pvParameters)
 				case MODEL_CLINT:
 					//TODO: estimated values. Left handed not coded
 					if (accel_g_y > 0.5 || accel_g_x > 0.6) {
+						if ((xTaskGetTickCount() - remote_is_visible_tick)*portTICK_RATE_MS > 500) {
+							is_display_visible = false;
+						}
+					}
+					else {
+						remote_is_visible_tick = xTaskGetTickCount();
+						is_display_visible = true;
+					}
+				break;
+				case MODEL_CUSTOM:
+					//NOTE: Insert custom logic to determine if display is visible
+					//		my_user_settings.left_handed
+					if (accel_g_y > 0.8) {
 						if ((xTaskGetTickCount() - remote_is_visible_tick)*portTICK_RATE_MS > 500) {
 							is_display_visible = false;
 						}
@@ -1138,7 +1163,7 @@ void app_main(void)
 	while (ret != ESP_OK)
 	{
 		my_user_settings.settings_version = SETTINGS_VERSION;
-		my_user_settings.remote_model = MODEL_BRUCE;
+		my_user_settings.remote_model = MODEL_CUSTOM;
 		save_user_settings(&my_user_settings);
 		ret = load_user_settings(&my_user_settings);
 	}
