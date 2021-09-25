@@ -6,8 +6,6 @@ extern long map(long x, long in_min, long in_max, long out_min, long out_max);
 static bool fault_indicator_displayed = false;
 static bool was_esc_responding = false;
 
-static int8_t x_offset = 0; // Offset display items on the x axis
-
 /**
  * Asymmetric sigmoidal approximation
  * https://www.desmos.com/calculator/oyhpsu8jnw
@@ -226,10 +224,6 @@ void drawCircularGaugeSmall(TFT_t * dev, uint8_t x, uint8_t y, uint8_t radius, u
 }
 
 TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height, user_settings_t *user_settings) {
-	//TODO: x_offset for other model(s) && no need to set this every iteration
-	if (user_settings->remote_model == MODEL_ALBERT) x_offset = -6; //TODO: Define offsets somewhere
-	else if (user_settings->remote_model == MODEL_BRUCE) x_offset = -2;
-
 	TickType_t startTick, endTick, diffTick;
 	startTick = xTaskGetTickCount();
 
@@ -267,15 +261,15 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height, 
 		alert_show = false;
 		alert_clear = false;
 		alert_visible = false;
-		lcdDrawFillRect(dev, x_offset + 32, 50, x_offset + 210, 185, BLACK);
-		//TODO: lol this is slow af: lcdDrawFillCircle(dev, x_offset + 120, 120, 100, BLACK);
+		lcdDrawFillRect(dev, 32, 50, 210, 185, BLACK);
+		//TODO: lol this is slow af: lcdDrawFillCircle(dev, 120, 120, 100, BLACK);
 		resetPreviousValues(); // Force all round gauges to redraw after alert
 	}
 	if (alert_show && !alert_visible)
 	{
 		alert_visible = true;
 		lcdDrawFillRect(dev, 22, 50, 200, 185, BLACK);
-		//TODO: lol this is slow af: lcdDrawFillCircle(dev, x_offset + 120, 120, 100, GREEN);
+		//TODO: lol this is slow af: lcdDrawFillCircle(dev, 120, 120, 100, GREEN);
 		resetPreviousValues(); // Force all round gauges to redraw after alert
 
 		fontWidth = 2;
@@ -283,7 +277,7 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height, 
 		lcdSetFontDirection(dev, DIRECTION0);
 		sprintf((char *)ascii, "Fault");
 		ypos = 55;
-		xpos = x_offset + (width - (strlen((char *)ascii) * 8 * fontWidth)) / 2;
+		xpos = (width - (strlen((char *)ascii) * 8 * fontWidth)) / 2;
 		color = YELLOW;
 		lcdDrawString2(dev, fontHeight, fontWidth, xpos, ypos, ascii, color);
 
@@ -291,24 +285,24 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height, 
 		color = WHITE;
 		sprintf((char *)ascii, "ESC ID %d", esc_telemetry_last_fault.vesc_id);
 		ypos = 115;
-		xpos = x_offset + (width - (strlen((char *)ascii) * fontWidth)) / 2;
+		xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
 		lcdDrawString(dev, fx, xpos, ypos, ascii, color);
 
 		snprintf((char *)ascii, 15, "%s", mc_interface_fault_to_string(esc_telemetry_last_fault.fault_code));
 		ypos = 135;
-		xpos = x_offset + (width - (strlen((char *)ascii) * fontWidth)) / 2;
+		xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
 		lcdDrawString(dev, fx, xpos, ypos, ascii, color);
 
 		color = GRAY;
 		sprintf((char *)ascii, "%0.1fV %0.0fA>%0.0fA", esc_telemetry_last_fault.v_in, esc_telemetry_last_fault.current_in, esc_telemetry_last_fault.current_motor);
 		ypos = 160;
-		xpos = x_offset + (width - (strlen((char *)ascii) * fontWidth)) / 2;
+		xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
 		lcdDrawString(dev, fx, xpos, ypos, ascii, color);
 
 		if (user_settings->dispaly_fahrenheit) sprintf((char *)ascii, "%0.0fF / %0.0fF", CTOF(esc_telemetry_last_fault.temp_mos), CTOF(esc_telemetry_last_fault.temp_motor));
 		else sprintf((char *)ascii, "%0.0fC / %0.0fC", esc_telemetry_last_fault.temp_mos, esc_telemetry_last_fault.temp_motor);
 		ypos = 180;
-		xpos = x_offset + (width - (strlen((char *)ascii) * fontWidth)) / 2;
+		xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
 		lcdDrawString(dev, fx, xpos, ypos, ascii, color);
 	}
 	else if (!alert_visible)
@@ -328,7 +322,7 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height, 
 		{
 			joystick_value_mapped_previous = joystick_value_mapped;
 			printf("joy %d, %f, %d\n", joystick_value_mapped, joystick_position, (int)(100-(joystick_position * 100)));
-			drawCircularGauge(dev, x_offset + 120, 110, 85, 5, 0, 90, 100-(joystick_position * 100), BLACK, PURPLE);
+			drawCircularGauge(dev, 120, 110, 85, 5, 0, 90, 100-(joystick_position * 100), BLACK, PURPLE);
 		}
 
 		// Odometer
@@ -341,7 +335,7 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height, 
 			/*
 			{
 				ypos = 165;
-				xpos = x_offset + (width - (strlen((char *)ascii) * fontWidth)) / 2;
+				xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
 				lcdSetFontDirection(dev, DIRECTION0);
 			}
 			color = WHITE;
@@ -351,7 +345,7 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height, 
 			fontHeight = 2;
 			{
 				ypos = 145;
-				xpos = x_offset + (width - (strlen((char *)ascii) * 6 /*font1 multiplier*/ * fontWidth)) / 2;
+				xpos = (width - (strlen((char *)ascii) * 6 /*font1 multiplier*/ * fontWidth)) / 2;
 				lcdSetFontDirection(dev, DIRECTION0);
 			}
 			color = WHITE;
@@ -367,7 +361,7 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height, 
 			sprintf((char *)ascii, " %3.1fV ", esc_telemetry.v_in);
 			{
 				ypos = 190;
-				xpos = x_offset + (width - (strlen((char *)ascii) * fontWidth)) / 2;
+				xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
 				lcdSetFontDirection(dev, DIRECTION0);
 			}
 			color = WHITE;
@@ -379,7 +373,7 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height, 
 			sprintf((char *)ascii, " %3.1fV ", esc_telemetry.v_in);
 			{
 				ypos = 170;
-				xpos = x_offset + (width - (strlen((char *)ascii) * 6 /*font1 multiplier*/ * fontWidth)) / 2;
+				xpos = (width - (strlen((char *)ascii) * 6 /*font1 multiplier*/ * fontWidth)) / 2;
 				lcdSetFontDirection(dev, DIRECTION0);
 			}
 			color = WHITE;
@@ -405,7 +399,7 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height, 
 				sprintf((char *)ascii, "%02d", abs(speed_now));
 				{
 					ypos = 60;
-					xpos = x_offset + (width - (strlen((char *)ascii) * 8 * fontWidth)) / 2;
+					xpos = (width - (strlen((char *)ascii) * 8 * fontWidth)) / 2;
 					lcdSetFontDirection(dev, DIRECTION0);
 				}
 				// If ESC is not responding display speed in GRAY
@@ -423,7 +417,7 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height, 
 	if (remote_battery != remote_battery_previous)
 	{
 		remote_battery_previous = remote_battery;
-		drawCircularGauge(dev, x_offset + 120, 110, 100, 5, 290, 350, remote_battery * 10, BLUE, RED);
+		drawCircularGauge(dev, 120, 110, 100, 5, 290, 350, remote_battery * 10, BLUE, RED);
 	}
 
 
@@ -433,13 +427,13 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height, 
 		gpio_usb_detect_previous = gpio_usb_detect;
 		if (gpio_usb_detect) {
 			//TODO: Draw charging icon
-			lcdDrawString(dev, fx, x_offset + 120 - 6, 24, (unsigned char*)"+", RED);
-			lcdDrawString(dev, fx, x_offset + 120 - 6, 25, (unsigned char*)"+", RED);
+			lcdDrawString(dev, fx, 120 - 6, 24, (unsigned char*)"+", RED);
+			lcdDrawString(dev, fx, 120 - 6, 25, (unsigned char*)"+", RED);
 		}
 		else
 		{
 			// Clear charging icon
-			lcdDrawFillRect(dev, x_offset + 120 - 6, 5, x_offset + 120 + 6, 20, BLACK);
+			lcdDrawFillRect(dev, 120 - 6, 5, 120 + 6, 20, BLACK);
 		}
 	}
 
@@ -447,10 +441,10 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height, 
 	//FAULT
 	if (esc_telemetry.fault_code != 0 && !fault_indicator_displayed)
 	{
-		drawJPEG(dev, (char*)"/spiffs/map_fault.jpg", 25, 25, x_offset + 107, 25);
+		drawJPEG(dev, (char*)"/spiffs/map_fault.jpg", 25, 25, 107, 25);
 		fault_indicator_displayed = true;
 	} else if (esc_telemetry.fault_code == 0 && fault_indicator_displayed) {
-		lcdDrawFillRect(dev, 97, 25, x_offset+107+25, 25+25, BLACK); // Clear fault indicator
+		lcdDrawFillRect(dev, 97, 25, 107+25, 25+25, BLACK); // Clear fault indicator
 		fault_indicator_displayed = false;
 	}
 
@@ -465,7 +459,7 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height, 
 	{
 		rssi_log_previous = rssi_log;
 		if (rssi_log < 0.1) rssi_log = 0.1; // rssi_log is minimum 10% to show 1 dot on the LCD
-		drawCircularGauge(dev, x_offset+120, 110, 100, 5, 10, 70, 100-/*invert*/(rssi_log*100), BLACK, GREEN);
+		drawCircularGauge(dev, 120, 110, 100, 5, 10, 70, 100-/*invert*/(rssi_log*100), BLACK, GREEN);
 	}
 
 
@@ -476,7 +470,7 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height, 
 		esc_battery_previous = esc_telemetry.battery_level;
 
 		// Battery
-		drawCircularGauge(dev, x_offset + 120, 110, 100, 5, 90, 270, esc_telemetry.battery_level * 100, BLUE, RED);
+		drawCircularGauge(dev, 120, 110, 100, 5, 90, 270, esc_telemetry.battery_level * 100, BLUE, RED);
 	}
 
 	lcdUpdate(dev);
@@ -511,7 +505,7 @@ TickType_t drawScreenSecondary(TFT_t * dev, FontxFile *fx, int width, int height
 	if (remote_battery != remote_battery_previous)
 	{
 		remote_battery_previous = remote_battery;
-		drawCircularGauge(dev, x_offset + 120, 110, 100, 5, 290, 350, remote_battery * 10, BLUE, RED);
+		drawCircularGauge(dev, 120, 110, 100, 5, 290, 350, remote_battery * 10, BLUE, RED);
 	}
 
 
@@ -521,13 +515,13 @@ TickType_t drawScreenSecondary(TFT_t * dev, FontxFile *fx, int width, int height
 		gpio_usb_detect_previous = gpio_usb_detect;
 		if (gpio_usb_detect) {
 			//TODO: Draw charging icon
-			lcdDrawString(dev, fx, x_offset + 120 - 6, 24, (unsigned char*)"+", RED);
-			lcdDrawString(dev, fx, x_offset + 120 - 6, 25, (unsigned char*)"+", RED);
+			lcdDrawString(dev, fx, 120 - 6, 24, (unsigned char*)"+", RED);
+			lcdDrawString(dev, fx, 120 - 6, 25, (unsigned char*)"+", RED);
 		}
 		else
 		{
 			// Clear charging icon
-			lcdDrawFillRect(dev, x_offset + 120 - 6, 5, x_offset + 120 + 6, 20, BLACK);
+			lcdDrawFillRect(dev, 120 - 6, 5, 120 + 6, 20, BLACK);
 		}
 	}
 
@@ -542,7 +536,7 @@ TickType_t drawScreenSecondary(TFT_t * dev, FontxFile *fx, int width, int height
 	{
 		rssi_log_previous = rssi_log;
 		if (rssi_log < 0.1) rssi_log = 0.1; // rssi_log is minimum 10% to show 1 dot on the LCD
-		drawCircularGauge(dev, x_offset+120, 110, 100, 5, 10, 70, 100-/*invert*/(rssi_log*100), BLACK, GREEN);
+		drawCircularGauge(dev, 120, 110, 100, 5, 10, 70, 100-/*invert*/(rssi_log*100), BLACK, GREEN);
 	}
 
 	// Temps
@@ -564,18 +558,18 @@ TickType_t drawScreenSecondary(TFT_t * dev, FontxFile *fx, int width, int height
 		if (display_temperature < 0) display_temperature = 0;
 
 		ypos = 115;
-		drawCircularGaugeSmall(dev, x_offset+80, ypos, 30, 4, 200, 160, /*100-invert*/(esc_temp_mapped*5), RED, GREEN);
+		drawCircularGaugeSmall(dev, 80, ypos, 30, 4, 200, 160, /*100-invert*/(esc_temp_mapped*5), RED, GREEN);
 		fontWidth = 2;
 		fontHeight = 2;
 		sprintf((char *)ascii, "%03.0f", display_temperature);
 		{
 			ypos -= 8;
-			xpos = x_offset + -40 + (width - (strlen((char *)ascii) * 6 /*font1 multiplier*/ * fontWidth)) / 2;
+			xpos = -40 + (width - (strlen((char *)ascii) * 6 /*font1 multiplier*/ * fontWidth)) / 2;
 			lcdSetFontDirection(dev, DIRECTION0);
 		}
 		color = WHITE;
 		lcdDrawString3(dev, fontHeight, fontWidth, xpos, ypos, ascii, color);
-		lcdDrawString3(dev, 1, 1, x_offset+80, ypos + 30, (uint8_t *)"E", color);
+		lcdDrawString3(dev, 1, 1, 80, ypos + 30, (uint8_t *)"E", color);
 	}
 
 	// Motor Temp
@@ -592,23 +586,23 @@ TickType_t drawScreenSecondary(TFT_t * dev, FontxFile *fx, int width, int height
 		if (display_temperature < 0) display_temperature = 0;
 
 		ypos = 115;
-		drawCircularGaugeSmall(dev, x_offset+160, ypos, 30, 4, 200, 160, /*100-invert*/(motor_temp_mapped*5), RED, GREEN);
+		drawCircularGaugeSmall(dev, 160, ypos, 30, 4, 200, 160, /*100-invert*/(motor_temp_mapped*5), RED, GREEN);
 		fontWidth = 2;
 		fontHeight = 2;
 		sprintf((char *)ascii, "%03.0f", display_temperature);
 		{
 			ypos -= 8;
-			xpos = x_offset + 40 + (width - (strlen((char *)ascii) * 6 /*font1 multiplier*/ * fontWidth)) / 2;
+			xpos = 40 + (width - (strlen((char *)ascii) * 6 /*font1 multiplier*/ * fontWidth)) / 2;
 			lcdSetFontDirection(dev, DIRECTION0);
 		}
 		color = WHITE;
 		lcdDrawString3(dev, fontHeight, fontWidth, xpos, ypos, ascii, color);
-		lcdDrawString3(dev, 1, 1, x_offset+160, ypos + 30, (uint8_t *)"M", color);
+		lcdDrawString3(dev, 1, 1, 160, ypos + 30, (uint8_t *)"M", color);
 	}
 
 	// Uptime
 	//sprintf((char *)ascii, "%d", xTaskGetTickCount() * portTICK_PERIOD_MS / 1000);
-	//xpos = x_offset + (width - (strlen((char *)ascii) * 6 /*font1 multiplier*/ * 1/*fontWidth*/)) / 2;
+	//xpos = (width - (strlen((char *)ascii) * 6 /*font1 multiplier*/ * 1/*fontWidth*/)) / 2;
 	//lcdDrawString3(dev, 1, 1, xpos, 110, ascii, color);
 
 	// Efficiency and Range
@@ -630,7 +624,7 @@ TickType_t drawScreenSecondary(TFT_t * dev, FontxFile *fx, int width, int height
 			sprintf((char *)ascii, " %03.1f ", efficiency);
 			{
 				ypos = 35;
-				xpos = x_offset + (width - (strlen((char*)ascii) * 8 * fontWidth)) / 2;
+				xpos = (width - (strlen((char*)ascii) * 8 * fontWidth)) / 2;
 			}
 			lcdDrawString2(dev, fontHeight, fontWidth, xpos, ypos, ascii, YELLOW);
 
@@ -641,7 +635,7 @@ TickType_t drawScreenSecondary(TFT_t * dev, FontxFile *fx, int width, int height
 			fontHeight = 1;
 			{
 				ypos += 30;
-				xpos = x_offset + (width - (strlen((char*)ascii) * 8 * fontWidth)) / 2;
+				xpos = (width - (strlen((char*)ascii) * 8 * fontWidth)) / 2;
 			}
 			lcdDrawString2(dev, fontWidth, fontHeight, xpos, ypos, ascii, WHITE);
 		}
@@ -656,7 +650,7 @@ TickType_t drawScreenSecondary(TFT_t * dev, FontxFile *fx, int width, int height
 			sprintf((char *)ascii, " %03.1f ", range);
 			{
 				ypos = 150;
-				xpos = x_offset + (width - (strlen((char*)ascii) * 8 * fontWidth)) / 2;
+				xpos = (width - (strlen((char*)ascii) * 8 * fontWidth)) / 2;
 			}
 			lcdDrawString2(dev, fontHeight, fontWidth, xpos, ypos, ascii, YELLOW);
 
@@ -667,7 +661,7 @@ TickType_t drawScreenSecondary(TFT_t * dev, FontxFile *fx, int width, int height
 			else sprintf((char *)ascii, "km");
 			{
 				ypos += 30;
-				xpos = x_offset + (width - (strlen((char*)ascii) * 8 * fontWidth)) / 2;
+				xpos = (width - (strlen((char*)ascii) * 8 * fontWidth)) / 2;
 			}
 			lcdDrawString2(dev, 1, 1, xpos, ypos, ascii, WHITE);
 		}
@@ -680,7 +674,7 @@ TickType_t drawScreenSecondary(TFT_t * dev, FontxFile *fx, int width, int height
 		esc_battery_previous = esc_telemetry.battery_level;
 
 		// Battery
-		drawCircularGauge(dev, x_offset + 120, 110, 100, 5, 90, 270, esc_telemetry.battery_level * 100, BLUE, RED);
+		drawCircularGauge(dev, 120, 110, 100, 5, 90, 270, esc_telemetry.battery_level * 100, BLUE, RED);
 	}
 
 	lcdUpdate(dev);
@@ -697,7 +691,7 @@ void drawFirmwareVersion(TFT_t * dev, char * version)
 	uint8_t fontWidth = 2;
 	uint8_t fontHeight = 2;
 	uint8_t ypos = 200;
-	uint8_t xpos = x_offset + (240 /*display width*/ - (strlen(version) * 6 /*font1 multiplier*/ * fontWidth)) / 2;
+	uint8_t xpos = (240 /*display width*/ - (strlen(version) * 6 /*font1 multiplier*/ * fontWidth)) / 2;
 	lcdDrawString3(dev, fontHeight, fontWidth, xpos, ypos, (uint8_t *)version, WHITE);
 }
 
@@ -849,7 +843,7 @@ TickType_t drawAlert(TFT_t * dev, FontxFile *fx, uint16_t p_color, char * title,
 	lcdSetFontDirection(dev, DIRECTION0);
 	snprintf((char *)ascii, 15, title);
 	ypos = 55;
-	xpos = x_offset + (width - (strlen((char *)ascii) * 8 * fontWidth)) / 2;
+	xpos = (width - (strlen((char *)ascii) * 8 * fontWidth)) / 2;
 	color = YELLOW;
 	lcdDrawString2(dev, fontHeight, fontWidth, xpos, ypos, ascii, color);
 
@@ -857,12 +851,12 @@ TickType_t drawAlert(TFT_t * dev, FontxFile *fx, uint16_t p_color, char * title,
 	color = WHITE;
 	snprintf((char *)ascii, 15, "%s", line1);
 	ypos = 115;
-	xpos = x_offset + (width - (strlen((char *)ascii) * fontWidth)) / 2;
+	xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
 	lcdDrawString(dev, fx, xpos, ypos, ascii, color);
 
 	snprintf((char *)ascii, 15, "%s", line2);
 	ypos = 135;
-	xpos = x_offset + (width - (strlen((char *)ascii) * fontWidth)) / 2;
+	xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
 	lcdDrawString(dev, fx, xpos, ypos, ascii, color);
 
 	//lcdDrawFillRect(dev, 25, 135, 215, 190, BLACK);
@@ -870,12 +864,12 @@ TickType_t drawAlert(TFT_t * dev, FontxFile *fx, uint16_t p_color, char * title,
 	color = GRAY;
 	snprintf((char *)ascii, 15, "%s", line3);
 	ypos = 165;
-	xpos = x_offset + (width - (strlen((char *)ascii) * fontWidth)) / 2;
+	xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
 	lcdDrawString(dev, fx, xpos, ypos, ascii, color);
 
 	snprintf((char *)ascii, 15, "%s", line4);
 	ypos = 185;
-	xpos = x_offset + (width - (strlen((char *)ascii) * fontWidth)) / 2;
+	xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
 	lcdDrawString(dev, fx, xpos, ypos, ascii, color);
 
 	endTick = xTaskGetTickCount();
@@ -927,7 +921,7 @@ TickType_t drawSetupMenu(TFT_t * dev, FontxFile *fx, user_settings_t *user_setti
 			else color = GRAY;
 			if (user_settings->disable_piezo) sprintf((char *)ascii, "Piezo: OFF");
 			else sprintf((char *)ascii, " Piezo: ON ");
-			xpos = x_offset + (width - (strlen((char *)ascii) * fontWidth)) / 2;
+			xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
 			lcdDrawString(dev, fx, xpos, ypos, ascii, color);
 		}
 
@@ -938,7 +932,7 @@ TickType_t drawSetupMenu(TFT_t * dev, FontxFile *fx, user_settings_t *user_setti
 			else color = GRAY;
 			if (user_settings->disable_buzzer) sprintf((char *)ascii, "Haptic: OFF");
 			else sprintf((char *)ascii, " Haptic: ON ");
-			xpos = x_offset + (width - (strlen((char *)ascii) * fontWidth)) / 2;
+			xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
 			lcdDrawString(dev, fx, xpos, ypos, ascii, color);
 		}
 
@@ -949,7 +943,7 @@ TickType_t drawSetupMenu(TFT_t * dev, FontxFile *fx, user_settings_t *user_setti
 			else color = GRAY;
 			if (user_settings->display_mph) sprintf((char *)ascii, " Speed: MPH ");
 			else sprintf((char *)ascii, " Speed: KPH ");
-			xpos = x_offset + (width - (strlen((char *)ascii) * fontWidth)) / 2;
+			xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
 			lcdDrawString(dev, fx, xpos, ypos, ascii, color);
 		}
 
@@ -960,7 +954,7 @@ TickType_t drawSetupMenu(TFT_t * dev, FontxFile *fx, user_settings_t *user_setti
 			else color = GRAY;
 			if (user_settings->dispaly_fahrenheit) sprintf((char *)ascii, "Temp: Fahrenheit");
 			else sprintf((char *)ascii, "  Temp: Celsius  ");
-			xpos = x_offset + (width - (strlen((char *)ascii) * fontWidth)) / 2;
+			xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
 			lcdDrawString(dev, fx, xpos, ypos, ascii, color);
 		}
 
@@ -971,7 +965,7 @@ TickType_t drawSetupMenu(TFT_t * dev, FontxFile *fx, user_settings_t *user_setti
 			else color = GRAY;
 			if (user_settings->throttle_reverse) sprintf((char *)ascii, " Throttle: Reverse ");
 			else sprintf((char *)ascii, " Throttle: Forward ");
-			xpos = x_offset + (width - (strlen((char *)ascii) * fontWidth)) / 2;
+			xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
 			lcdDrawString(dev, fx, xpos, ypos, ascii, color);
 		}
 
@@ -993,8 +987,11 @@ TickType_t drawSetupMenu(TFT_t * dev, FontxFile *fx, user_settings_t *user_setti
 				case MODEL_CLINT:
 					sprintf((char *)ascii, " Model: Clint ");
 					break;
+				case MODEL_CUSTOM:
+					sprintf((char *)ascii, "Model: Custom");
+					break;
 			}
-			xpos = x_offset + (width - (strlen((char *)ascii) * fontWidth)) / 2;
+			xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
 			lcdDrawString(dev, fx, xpos, ypos, ascii, color);
 		}
 
@@ -1005,7 +1002,7 @@ TickType_t drawSetupMenu(TFT_t * dev, FontxFile *fx, user_settings_t *user_setti
 			else color = GRAY;
 			if (user_settings->left_handed) sprintf((char *)ascii, " Lefty: True ");
 			else sprintf((char *)ascii, " Lefty: False ");
-			xpos = x_offset + (width - (strlen((char *)ascii) * fontWidth)) / 2;
+			xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
 			lcdDrawString(dev, fx, xpos, ypos, ascii, color);
 		}
 
