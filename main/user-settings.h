@@ -18,6 +18,7 @@ typedef enum {
 	MODEL_ALBERT,
 	MODEL_BRUCE,
 	MODEL_CLINT,
+	MODEL_CUSTOM,
 } REMOTE_MODELS;
 
 typedef struct {
