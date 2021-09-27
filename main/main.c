@@ -450,15 +450,15 @@ static void i2c_task(void *arg)
 		double acceleration = sqrt(pow(accel_gx, 2) + pow(accel_gy, 2) + pow(accel_gz, 2));
 		if (acceleration > 0.9 && acceleration < 1.15) {
 			// Smooth accelerometer readings
-			accel_g_x = (0.2 * accel_gx) + (0.8 * accel_g_x);
-			accel_g_y = (0.2 * accel_gy) + (0.8 * accel_g_y);
-			accel_g_z = (0.2 * accel_gz) + (0.8 * accel_g_z);
+			accel_g_x = (0.4 * accel_gx) + (0.6 * accel_g_x);
+			accel_g_y = (0.4 * accel_gy) + (0.6 * accel_g_y);
+			accel_g_z = (0.4 * accel_gz) + (0.6 * accel_g_z);
 		}
 
 		gyro_x = gyro.gyro_x;
 		gyro_y = gyro.gyro_y;
 		gyro_z = gyro.gyro_z;
-		//ESP_LOGI(__FUNCTION__, "ADC joy1:%d joy2:%d batt:%d rssi:%d IMU x:%f y:%f z:%f", adc_raw_joystick, adc_raw_joystick_2, adc_raw_battery_level, adc_raw_rssi, accel_g_x, accel_g_y, accel_g_z);
+		//ESP_LOGI(__FUNCTION__, "ADC joy1:%d joy2:%d batt:%d rssi:%d IMU x:%.3f y:%.3f z:%.3f t:%.3f (%d)", adc_raw_joystick, adc_raw_joystick_2, adc_raw_battery_level, adc_raw_rssi, accel_g_x, accel_g_y, accel_g_z, acceleration, (acceleration > 0.9 && acceleration < 1.15));
 		//ESP_LOGI(__FUNCTION__, "IMU x:%d y:%d z:%d", gyro_x, gyro_y, gyro_z);
 
 		if (accel_g_x == 0 && accel_g_y == 0 && accel_g_z == 0) {
@@ -1001,7 +1001,7 @@ void ST7789_Task(void *pvParameters)
 				case MODEL_BRUCE:
 					//NOTE: Left and Right handed is the same
 					if (accel_g_y > 0.5 || accel_g_z > 0.3) {
-						if ((xTaskGetTickCount() - remote_is_visible_tick)*portTICK_RATE_MS > 500) {
+						if ((xTaskGetTickCount() - remote_is_visible_tick)*portTICK_RATE_MS > 250) {
 							is_display_visible = false;
 						}
 					}
@@ -1013,7 +1013,7 @@ void ST7789_Task(void *pvParameters)
 				case MODEL_CLINT:
 					//TODO: estimated values. Left handed not coded
 					if (accel_g_y > 0.5 || accel_g_x > 0.6) {
-						if ((xTaskGetTickCount() - remote_is_visible_tick)*portTICK_RATE_MS > 500) {
+						if ((xTaskGetTickCount() - remote_is_visible_tick)*portTICK_RATE_MS > 250) {
 							is_display_visible = false;
 						}
 					}
@@ -1025,8 +1025,8 @@ void ST7789_Task(void *pvParameters)
 				case MODEL_CUSTOM:
 					//NOTE: Insert custom logic to determine if display is visible
 					//		my_user_settings.left_handed
-					if (accel_g_y > 0.8) {
-						if ((xTaskGetTickCount() - remote_is_visible_tick)*portTICK_RATE_MS > 500) {
+					if (accel_g_z > -0.8) {
+						if ((xTaskGetTickCount() - remote_is_visible_tick)*portTICK_RATE_MS > 250) {
 							is_display_visible = false;
 						}
 					}
