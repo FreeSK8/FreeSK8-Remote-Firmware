@@ -1,3 +1,13 @@
+v0.2.0
+
+* Added Left Handed User Setting
+* Added "Custom" Model for developers
+* Added Display Frame Buffer
+* Updated Boot Images
+* Remove fuzz from Display on boot
+* Filter accelerometer readings
+* Increase is_display_visible sensitivity
+
 v0.1.2
 
 * Reset idle throttle timer while charging
