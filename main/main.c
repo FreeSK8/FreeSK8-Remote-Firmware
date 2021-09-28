@@ -23,14 +23,14 @@
 
 #include "lib/haptic/haptic.h"
 
-const char * version = "0.1.2";
+const char * version = "0.2.0";
 
 #define ADC_BATTERY_MIN 525
 
 int gyro_x, gyro_y, gyro_z;
-float accel_g_x, accel_g_x_delta;
-float accel_g_y, accel_g_y_delta;
-float accel_g_z, accel_g_z_delta;
+float accel_g_x;
+float accel_g_y;
+float accel_g_z;
 
 bool is_remote_idle = true; //NOTE: Controlled by IMU
 bool display_second_screen = false;
@@ -247,7 +247,10 @@ static void gpio_input_task(void* arg)
 							my_user_settings.throttle_reverse = !my_user_settings.throttle_reverse;
 						break;
 						case SETTING_MODEL:
-							if (++my_user_settings.remote_model > MODEL_CLINT) my_user_settings.remote_model = MODEL_ALBERT;
+							if (++my_user_settings.remote_model > MODEL_CUSTOM) my_user_settings.remote_model = MODEL_ALBERT;
+						break;
+						case SETTING_LEFTY:
+							my_user_settings.left_handed = !my_user_settings.left_handed;
 						break;
 					}
 					save_user_settings(&my_user_settings);
@@ -443,17 +446,19 @@ static void i2c_task(void *arg)
 		float accel_gy = (float) accel.accel_y * accel_res - accel_bias[1];
 		float accel_gz = (float) accel.accel_z * accel_res - accel_bias[2];
 
-		accel_g_x_delta = accel_g_x - accel_gx;
-		accel_g_y_delta = accel_g_y - accel_gy;
-		accel_g_z_delta = accel_g_z - accel_gz;
-		accel_g_x = (0.2 * accel_gx) + (0.8 * accel_g_x);
-		accel_g_y = (0.2 * accel_gy) + (0.8 * accel_g_y);
-		accel_g_z = (0.2 * accel_gz) + (0.8 * accel_g_z);
+		// Filter accelerometer
+		double acceleration = sqrt(pow(accel_gx, 2) + pow(accel_gy, 2) + pow(accel_gz, 2));
+		if (acceleration > 0.9 && acceleration < 1.15) {
+			// Smooth accelerometer readings
+			accel_g_x = (0.4 * accel_gx) + (0.6 * accel_g_x);
+			accel_g_y = (0.4 * accel_gy) + (0.6 * accel_g_y);
+			accel_g_z = (0.4 * accel_gz) + (0.6 * accel_g_z);
+		}
 
 		gyro_x = gyro.gyro_x;
 		gyro_y = gyro.gyro_y;
 		gyro_z = gyro.gyro_z;
-		//ESP_LOGI(__FUNCTION__, "ADC joy1:%d joy2:%d batt:%d rssi:%d IMU x:%f y:%f z:%f", adc_raw_joystick, adc_raw_joystick_2, adc_raw_battery_level, adc_raw_rssi, accel_g_x, accel_g_y, accel_g_z);
+		//ESP_LOGI(__FUNCTION__, "ADC joy1:%d joy2:%d batt:%d rssi:%d IMU x:%.3f y:%.3f z:%.3f t:%.3f (%d)", adc_raw_joystick, adc_raw_joystick_2, adc_raw_battery_level, adc_raw_rssi, accel_g_x, accel_g_y, accel_g_z, acceleration, (acceleration > 0.9 && acceleration < 1.15));
 		//ESP_LOGI(__FUNCTION__, "IMU x:%d y:%d z:%d", gyro_x, gyro_y, gyro_z);
 
 		if (accel_g_x == 0 && accel_g_y == 0 && accel_g_z == 0) {
@@ -883,7 +888,19 @@ void ST7789_Task(void *pvParameters)
 	
 	TFT_t dev;
 	spi_master_init(&dev, CONFIG_MOSI_GPIO, CONFIG_SCLK_GPIO, CONFIG_CS_GPIO, CONFIG_DC_GPIO, CONFIG_RESET_GPIO, CONFIG_BL_GPIO);
-	lcdInit(&dev, CONFIG_WIDTH, CONFIG_HEIGHT, CONFIG_OFFSETX, CONFIG_OFFSETY);
+	int8_t x_offset = 0;
+	switch (my_user_settings.remote_model) {
+		case MODEL_ALBERT:
+			x_offset = -5;
+		break;
+		case MODEL_BRUCE:
+			x_offset = -2;
+		break;
+		case MODEL_CUSTOM:
+			x_offset = 0;
+		break;
+	}
+	lcdInit(&dev, CONFIG_WIDTH, CONFIG_HEIGHT, x_offset, CONFIG_OFFSETY);
 
 #if CONFIG_INVERSION
 	ESP_LOGI(TAG, "Enable Display Inversion");
@@ -892,14 +909,17 @@ void ST7789_Task(void *pvParameters)
 
 	// FreeSK8 Logo
 	lcdFillScreen(&dev, BLACK);
-	drawFirmwareVersion(&dev, (char *)version);
 	if (remote_in_pairing_mode) {
-		drawJPEG(&dev, (char*)"/spiffs/logo_badge_pairing.jpg", 206, 179, 17, 63);
+		drawJPEG(&dev, (char*)"/spiffs/pear.jpg", 92, 110, 74, 65);
+	} else if (remote_in_setup_mode) {
+		drawJPEG(&dev, (char*)"/spiffs/gear.jpg", 110, 110, 65, 65);
 	} else {
-		drawJPEG(&dev, (char*)"/spiffs/logo_badge.jpg", 206, 114, 17, 63);
+		drawJPEG(&dev, (char*)"/spiffs/freesk8.jpg", 114, 82, 63, 79);
 	}
+	drawFirmwareVersion(&dev, (char *)version);
+	lcdUpdate(&dev);
 
-	vTaskDelay(1000/portTICK_PERIOD_MS);
+	vTaskDelay(2000/portTICK_PERIOD_MS);
 	lcdFillScreen(&dev, BLACK);
 
 	bool is_display_visible = true;
@@ -910,7 +930,7 @@ void ST7789_Task(void *pvParameters)
 		if (remote_in_setup_mode)
 		{
 			// Move settings selection up and down
-			if (joystick_value_mapped < 55 && user_settings_index < SETTING_MODEL) ++user_settings_index;
+			if (joystick_value_mapped < 55 && user_settings_index < SETTING_LEFTY) ++user_settings_index;
 			if (joystick_value_mapped > 200 && user_settings_index > SETTING_PIEZO) --user_settings_index;
 
 			lcdBacklightOn(&dev);
@@ -965,9 +985,10 @@ void ST7789_Task(void *pvParameters)
 			// Check if remote is in a visible orientation
 			switch (my_user_settings.remote_model)
 			{
-				//TODO: left vs right handed values: my_user_settings.throttle_reverse ?
 				case MODEL_ALBERT:
-					if (accel_g_x > 0.7 || accel_g_z > 0.4) {
+					if ( (!my_user_settings.left_handed && (accel_g_x > 0.7 || accel_g_z > 0.4)) ||
+						 (my_user_settings.left_handed && (accel_g_x < -0.7 || accel_g_z > 0.4))
+					) {
 						if ((xTaskGetTickCount() - remote_is_visible_tick)*portTICK_RATE_MS > 500) {
 							is_display_visible = false;
 						}
@@ -978,8 +999,9 @@ void ST7789_Task(void *pvParameters)
 					}
 				break;
 				case MODEL_BRUCE:
+					//NOTE: Left and Right handed is the same
 					if (accel_g_y > 0.5 || accel_g_z > 0.3) {
-						if ((xTaskGetTickCount() - remote_is_visible_tick)*portTICK_RATE_MS > 500) {
+						if ((xTaskGetTickCount() - remote_is_visible_tick)*portTICK_RATE_MS > 250) {
 							is_display_visible = false;
 						}
 					}
@@ -989,9 +1011,22 @@ void ST7789_Task(void *pvParameters)
 					}
 				break;
 				case MODEL_CLINT:
-					//TODO: estimated
+					//TODO: estimated values. Left handed not coded
 					if (accel_g_y > 0.5 || accel_g_x > 0.6) {
-						if ((xTaskGetTickCount() - remote_is_visible_tick)*portTICK_RATE_MS > 500) {
+						if ((xTaskGetTickCount() - remote_is_visible_tick)*portTICK_RATE_MS > 250) {
+							is_display_visible = false;
+						}
+					}
+					else {
+						remote_is_visible_tick = xTaskGetTickCount();
+						is_display_visible = true;
+					}
+				break;
+				case MODEL_CUSTOM:
+					//NOTE: Insert custom logic to determine if display is visible
+					//		my_user_settings.left_handed
+					if (accel_g_z > -0.8) {
+						if ((xTaskGetTickCount() - remote_is_visible_tick)*portTICK_RATE_MS > 250) {
 							is_display_visible = false;
 						}
 					}
@@ -1128,7 +1163,7 @@ void app_main(void)
 	while (ret != ESP_OK)
 	{
 		my_user_settings.settings_version = SETTINGS_VERSION;
-		my_user_settings.remote_model = MODEL_BRUCE;
+		my_user_settings.remote_model = MODEL_CUSTOM;
 		save_user_settings(&my_user_settings);
 		ret = load_user_settings(&my_user_settings);
 	}
