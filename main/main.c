@@ -23,7 +23,7 @@
 
 #include "lib/haptic/haptic.h"
 
-const char * version = "0.2.0";
+const char * version = "0.2.1";
 
 #define ADC_BATTERY_MIN 525
 
@@ -271,6 +271,10 @@ static void gpio_input_task(void* arg)
 			}
 			if ((ev.pin == GPIO_INPUT_IO_0) && (ev.event == BUTTON_DOUBLE_CLICK)) {
 				// SW3 on HW v1.2 PCB
+
+				// Do not throttle lock in setup mode
+				if (remote_in_setup_mode) continue;
+
 				is_throttle_locked = !is_throttle_locked; // Toggle throttle lock
 				if (is_throttle_locked)
 				{
