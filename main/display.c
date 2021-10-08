@@ -387,6 +387,10 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height, 
 			int speed_now = 0;
 			if (user_settings->display_mph) speed_now = (int)(esc_telemetry.speed * metersPerSecondToKph * KTOM);
 			else speed_now = (int)(esc_telemetry.speed * metersPerSecondToKph);
+			// Ensure all speeds are positive
+			speed_now = abs(speed_now);
+			// Wrap Speed if triple digits
+			if (speed_now > 99) speed_now -= 100;
 			// Check if ESC is responding
 			bool is_esc_responding = (xTaskGetTickCount() - esc_last_responded)*portTICK_RATE_MS < 10 * 1000;
 			// Update only when changing or esc starts/stops responding
@@ -396,7 +400,7 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height, 
 				fontWidth = 6;
 				fontHeight = 5;
 				speed_now_previous = speed_now;
-				sprintf((char *)ascii, "%02d", abs(speed_now));
+				sprintf((char *)ascii, "%02d", speed_now);
 				{
 					ypos = 60;
 					xpos = (width - (strlen((char *)ascii) * 8 * fontWidth)) / 2;
