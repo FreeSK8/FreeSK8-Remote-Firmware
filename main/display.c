@@ -318,10 +318,9 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height, 
 		} else {
 			joystick_position = 0;
 		}
-		if (abs(joystick_value_mapped_previous - joystick_value_mapped) > 12)
+		if (joystick_value_mapped_previous != joystick_value_mapped)
 		{
 			joystick_value_mapped_previous = joystick_value_mapped;
-			printf("joy %d, %f, %d\n", joystick_value_mapped, joystick_position, (int)(100-(joystick_position * 100)));
 			drawCircularGauge(dev, 120, 110, 85, 5, 0, 90, 100-(joystick_position * 100), BLACK, PURPLE);
 		}
 
