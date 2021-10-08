@@ -391,7 +391,7 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height, 
 			// Wrap Speed if triple digits
 			if (speed_now > 99) speed_now -= 100;
 			// Check if ESC is responding
-			bool is_esc_responding = (xTaskGetTickCount() - esc_last_responded)*portTICK_RATE_MS < 10 * 1000;
+			bool is_esc_responding = (xTaskGetTickCount() - esc_last_responded)*portTICK_RATE_MS < 1000;
 			// Update only when changing or esc starts/stops responding
 			if (speed_now != speed_now_previous || is_esc_responding != was_esc_responding)
 			{
