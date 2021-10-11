@@ -895,10 +895,12 @@ void ST7789_Task(void *pvParameters)
 	int8_t x_offset = 0;
 	switch (my_user_settings.remote_model) {
 		case MODEL_ALBERT:
-			x_offset = -5;
+			if (my_user_settings.left_handed) x_offset = 5;
+			else x_offset = -5;
 		break;
 		case MODEL_BRUCE:
-			x_offset = -2;
+			if (my_user_settings.left_handed) x_offset = 2;
+			else x_offset = -2;
 		break;
 		case MODEL_CUSTOM:
 			x_offset = 0;
