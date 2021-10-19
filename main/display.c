@@ -318,10 +318,9 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height, 
 		} else {
 			joystick_position = 0;
 		}
-		if (abs(joystick_value_mapped_previous - joystick_value_mapped) > 12)
+		if (joystick_value_mapped_previous != joystick_value_mapped)
 		{
 			joystick_value_mapped_previous = joystick_value_mapped;
-			printf("joy %d, %f, %d\n", joystick_value_mapped, joystick_position, (int)(100-(joystick_position * 100)));
 			drawCircularGauge(dev, 120, 110, 85, 5, 0, 90, 100-(joystick_position * 100), BLACK, PURPLE);
 		}
 
@@ -387,8 +386,12 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height, 
 			int speed_now = 0;
 			if (user_settings->display_mph) speed_now = (int)(esc_telemetry.speed * metersPerSecondToKph * KTOM);
 			else speed_now = (int)(esc_telemetry.speed * metersPerSecondToKph);
+			// Ensure all speeds are positive
+			speed_now = abs(speed_now);
+			// Wrap Speed if triple digits
+			if (speed_now > 99) speed_now -= 100;
 			// Check if ESC is responding
-			bool is_esc_responding = (xTaskGetTickCount() - esc_last_responded)*portTICK_RATE_MS < 10 * 1000;
+			bool is_esc_responding = (xTaskGetTickCount() - esc_last_responded)*portTICK_RATE_MS < 1000;
 			// Update only when changing or esc starts/stops responding
 			if (speed_now != speed_now_previous || is_esc_responding != was_esc_responding)
 			{
@@ -396,7 +399,7 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height, 
 				fontWidth = 6;
 				fontHeight = 5;
 				speed_now_previous = speed_now;
-				sprintf((char *)ascii, "%02d", abs(speed_now));
+				sprintf((char *)ascii, "%02d", speed_now);
 				{
 					ypos = 60;
 					xpos = (width - (strlen((char *)ascii) * 8 * fontWidth)) / 2;

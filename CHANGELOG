@@ -1,3 +1,10 @@
+v0.2.1
+
+* Disallow Throttle Lock in Setup Menu
+* Wrap triple digit speeds
+* Fix displayed throttle position
+* Dim displayed speed with 1s of ESC inactivity
+
 v0.2.0
 
 * Added Left Handed User Setting
