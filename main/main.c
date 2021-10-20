@@ -23,7 +23,7 @@
 
 #include "lib/haptic/haptic.h"
 
-const char * version = "0.2.1";
+const char * version = "0.3.0";
 
 #define ADC_BATTERY_MIN 525
 
@@ -34,10 +34,13 @@ float accel_g_z;
 
 bool is_remote_idle = true; //NOTE: Controlled by IMU
 bool display_second_screen = false;
-bool display_blank_now = false;
+bool display_blank_now = false; // Flag to clear display contents from outside display task
 
 bool is_throttle_idle = false;
 bool is_throttle_locked = false;
+
+bool esc_timeout_occured = false;
+bool esc_timeout_dismissed = false;
 
 TickType_t esc_last_responded = 0;
 TickType_t startTickThrottleIdle = 0;
@@ -259,6 +262,12 @@ static void gpio_input_task(void* arg)
 
 				// No action desired when throttle is locked
 				if (is_throttle_locked) continue;
+
+				// Clear ESC timeout flag
+				if (esc_timeout_occured) {
+					esc_timeout_occured = false;
+					esc_timeout_dismissed = true;
+				}
 
 				// Clear alert or change display
 				if (alert_visible) alert_clear = true;
@@ -895,12 +904,12 @@ void ST7789_Task(void *pvParameters)
 	int8_t x_offset = 0;
 	switch (my_user_settings.remote_model) {
 		case MODEL_ALBERT:
-			if (my_user_settings.left_handed) x_offset = 5;
-			else x_offset = -5;
+			if (my_user_settings.left_handed) x_offset = 10;
+			else x_offset = -10;
 		break;
 		case MODEL_BRUCE:
-			if (my_user_settings.left_handed) x_offset = 2;
-			else x_offset = -2;
+			if (my_user_settings.left_handed) x_offset = 4;
+			else x_offset = -4;
 		break;
 		case MODEL_CUSTOM:
 			x_offset = 0;
@@ -931,6 +940,7 @@ void ST7789_Task(void *pvParameters)
 	bool is_display_visible = true;
 	TickType_t remote_is_idle_tick = xTaskGetTickCount();
 	TickType_t remote_is_visible_tick = xTaskGetTickCount();
+
 	while(1) {
 		// Check for setup mode
 		if (remote_in_setup_mode)
@@ -975,10 +985,9 @@ void ST7789_Task(void *pvParameters)
 			if (abs(gyro_x) > gyro_threshold || abs(gyro_y) > gyro_threshold || abs(gyro_z) > gyro_threshold)
 			{
 				remote_is_idle_tick = xTaskGetTickCount();
-				// Check if we were idle and reset the display values
+				// Check if we were idle
 				if (is_remote_idle) {
 					printf("remote is moving %d, %d, %d\n", gyro_x, gyro_y, gyro_z);
-					resetPreviousValues();
 				}
 				is_remote_idle = false;
 			}
@@ -1054,11 +1063,17 @@ void ST7789_Task(void *pvParameters)
 			lcdBacklightOn(&dev);
 		}
 
+		// Check if ESC timeout alert is necessary
+		if (!esc_timeout_occured && esc_last_responded != 0) {
+			esc_timeout_occured = (xTaskGetTickCount() - esc_last_responded)*portTICK_RATE_MS > 2000;
+		}
+
 		// Draw a blank screen when the remote is idle
 		if (is_remote_idle)
 		{
 			lcdFillScreen(&dev, BLACK);
 			alert_visible = false;
+			esc_timeout_dismissed = false; // Allow the ESC timeout message to be re-display
 		}
 		else
 		// Draw the good stuff otherwise
@@ -1068,7 +1083,6 @@ void ST7789_Task(void *pvParameters)
 				display_blank_now = false;
 				lcdFillScreen(&dev, BLACK);
 				alert_visible = false;
-				resetPreviousValues();
 			}
 			// Draw primary or secondary display
 			if (display_second_screen && !alert_visible)
@@ -1079,7 +1093,11 @@ void ST7789_Task(void *pvParameters)
 			{
 				// Display throttle locked alert over primary screen
 				drawAlert(&dev, fx24G, RED, "Throttle", "locked", "", "Double click", "to unlock");
-				drawScreenPrimary(&dev, fx24G, CONFIG_WIDTH, CONFIG_HEIGHT, &my_user_settings);
+			}
+			else if (!alert_visible && esc_timeout_occured && !esc_timeout_dismissed) {
+				// Display ESC timeout over primary screen
+				lcdFillScreen(&dev, BLACK);
+				drawAlert(&dev, fx24G, RED, "WARNING", "ESC stopped", "responding", "for 2 or more", "seconds");
 			}
 			else
 			{
