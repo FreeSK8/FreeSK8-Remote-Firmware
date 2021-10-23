@@ -292,8 +292,6 @@ static void gpio_input_task(void* arg)
 				is_throttle_locked = !is_throttle_locked; // Toggle throttle lock
 				if (is_throttle_locked)
 				{
-					display_blank_now = true; // Clear display
-					display_second_screen = false; // Request primary screen with throttle locked
 					if (!my_user_settings.disable_piezo) melody_play(MELODY_GPS_LOST, true);
 					haptic_play(MELODY_GPS_LOST, true);
 				} else {
@@ -1119,12 +1117,16 @@ void ST7789_Task(void *pvParameters)
 			{
 				lcdFillScreen(&dev, BLACK);
 				drawAlert(&dev, fx24G, RED, "Throttle", "locked", "", "Double click", "to unlock");
+
+				display_second_screen = false;
 			}
 			// Check for ESC timeout
 			else if (!alert_visible && esc_timeout_occured && !esc_timeout_dismissed) {
 
 				lcdFillScreen(&dev, BLACK);
 				drawAlert(&dev, fx24G, RED, "WARNING", "ESC stopped", "responding", "for 2 or more", "seconds");
+
+				display_second_screen = false;
 			}
 			// Draw secondary display if no alerts are visible
 			else if (display_second_screen && !alert_visible)
