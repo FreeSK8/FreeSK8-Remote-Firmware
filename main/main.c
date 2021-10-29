@@ -1124,7 +1124,7 @@ void ST7789_Task(void *pvParameters)
 			else if (!alert_visible && esc_timeout_occured && !esc_timeout_dismissed) {
 
 				lcdFillScreen(&dev, BLACK);
-				drawAlert(&dev, fx24G, RED, "WARNING", "ESC stopped", "responding", "for 2 or more", "seconds");
+				drawAlert(&dev, fx24G, RED, "WARNING", "Signal", "was lost", "for 2 or more", "seconds");
 
 				display_second_screen = false;
 			}
