@@ -488,8 +488,11 @@ static void i2c_task(void *arg)
 		gyro_x = gyro.gyro_x;
 		gyro_y = gyro.gyro_y;
 		gyro_z = gyro.gyro_z;
-		//ESP_LOGI(__FUNCTION__, "ADC joy1:%d joy2:%d batt:%d rssi:%d IMU x:%.3f y:%.3f z:%.3f t:%.3f (%d)", adc_raw_joystick, adc_raw_joystick_2, adc_raw_battery_level, adc_raw_rssi, accel_g_x, accel_g_y, accel_g_z, acceleration, (acceleration > 0.9 && acceleration < 1.15));
-		//ESP_LOGI(__FUNCTION__, "IMU x:%d y:%d z:%d", gyro_x, gyro_y, gyro_z);
+
+		// Debug output if ADC is sus
+		if (adc_raw_battery_level < ADC_BATTERY_MIN || adc_raw_joystick == ADS1015_ERROR || adc_raw_battery_level == ADS1015_ERROR || adc_raw_joystick_2 == ADS1015_ERROR || adc_raw_rssi == ADS1015_ERROR) {
+			ESP_LOGI(__FUNCTION__, "ADC joy1:%d joy2:%d batt:%d rssi:%d IMU ax:%.3f ay:%.3f az:%.3f gx:%d gy:%d gz:%d", adc_raw_joystick, adc_raw_joystick_2, adc_raw_battery_level, adc_raw_rssi, accel_g_x, accel_g_y, accel_g_z, gyro_x, gyro_y, gyro_z);
+		}
 
 		if (accel_g_x == 0 && accel_g_y == 0 && accel_g_z == 0) {
 			ESP_LOGE(__FUNCTION__, "IMU not responding");
