@@ -95,3 +95,9 @@ const int melody_gps_lost[] = {
     NOTE_D4,8, NOTE_E4,8, NOTE_D4,8, NOTE_E4,8, NOTE_D4,8, NOTE_E4,8,
 };
 const int tempo_gps_lost = 420;
+
+const int melody_chirps[] = {
+    // Chirps
+    NOTE_G5,8, NOTE_G5,8, REST,4, REST,4,
+};
+const int tempo_chirps = 210;

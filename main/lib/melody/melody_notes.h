@@ -107,6 +107,7 @@ enum {
     MELODY_STARTUP,
     MELODY_GPS_LOCK,
     MELODY_GPS_LOST,
+    MELODY_CHRIPS,
 };
 
 extern const int melody_gotchi_fault[226];
@@ -135,5 +136,7 @@ extern const int melody_gps_locked[12];
 extern const int tempo_gps_locked;
 extern const int melody_gps_lost[12];
 extern const int tempo_gps_lost;
+extern const int melody_chirps[8];
+extern const int tempo_chirps;
 
 #endif

@@ -128,6 +128,11 @@ void haptic_play(int index, bool interrupt_melody)
 			haptic_notes = sizeof(melody_gps_lost)/sizeof(melody_gps_lost[0])/2;
 			haptic_wholenote = (60000 * 4) / tempo_gps_lost;
 		break;
+		case MELODY_CHRIPS:
+			haptic = (int*)&melody_chirps;
+			haptic_notes=sizeof(melody_chirps)/sizeof(melody_chirps[0])/2;
+			haptic_wholenote = (60000 * 4) / tempo_chirps;
+		break;
 		default:
 			ESP_LOGW(__FUNCTION__,"Invalid index %d", index);
 		break;
