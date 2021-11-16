@@ -6,14 +6,17 @@ extern long map(long x, long in_min, long in_max, long out_min, long out_max);
 static bool fault_indicator_displayed = false;
 
 /**
- * Asymmetric sigmoidal approximation
+ * Modified Asymmetric sigmoidal approximation
  * https://www.desmos.com/calculator/oyhpsu8jnw
  *
  * c - c / [1 + (k*x/v)^4.5]^3
  */
-static inline uint8_t asigmoidal(uint16_t voltage, uint16_t minVoltage, uint16_t maxVoltage) {
-	uint8_t result = 101 - (101 / pow(1 + pow(1.33 * (voltage - minVoltage)/(maxVoltage - minVoltage) ,4.5), 3));
-	return result >= 100 ? 100 : result;
+static inline uint8_t asigmoidal(uint16_t value, uint16_t min_value, uint16_t max_value) {
+	uint16_t value_now = value;
+	if (value_now < min_value) value_now = min_value;
+	if (value_now > max_value) value_now = max_value;
+	uint8_t result = 103 - (90 / pow(1 + pow(1.56 * (value_now - min_value)/(max_value - min_value),1.5), 3));
+	return result > 100 ? 100 : result;
 }
 
 TickType_t drawScreenDeveloper(TFT_t * dev, FontxFile *fx, int width, int height) {
@@ -293,7 +296,7 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height, 
 		// Odometer
 		{
 			if (user_settings->display_mph) sprintf((char *)ascii, "%03.1fmi", esc_telemetry.tachometer_abs / 1000.0 * KTOM);
-			else sprintf((char *)ascii, "%04.1fkm", esc_telemetry.tachometer_abs / 1000.0);
+			else sprintf((char *)ascii, "%03.1fkm", esc_telemetry.tachometer_abs / 1000.0);
 			fontWidth = 3;
 			fontHeight = 3;
 			{
@@ -353,8 +356,7 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height, 
 	//Remote Battery
 	//uint8_t remote_battery = map(adc_raw_battery_level, adc_raw_battery_minimum, adc_raw_battery_maximum, 1, 10);
 	uint8_t remote_battery = asigmoidal(adc_raw_battery_level, adc_raw_battery_minimum, adc_raw_battery_maximum);
-	remote_battery /= 10;
-	drawCircularGauge(dev, 120, 110, 100, 5, 290, 350, remote_battery * 10, BLUE, RED);
+	drawCircularGauge(dev, 120, 110, 100, 5, 290, 350, remote_battery, BLUE, RED);
 
 
 	// Remote is Charging
@@ -426,8 +428,7 @@ TickType_t drawScreenSecondary(TFT_t * dev, FontxFile *fx, int width, int height
 	//Remote Battery
 	//uint8_t remote_battery = map(adc_raw_battery_level, adc_raw_battery_minimum, adc_raw_battery_maximum, 1, 10);
 	uint8_t remote_battery = asigmoidal(adc_raw_battery_level, adc_raw_battery_minimum, adc_raw_battery_maximum);
-	remote_battery /= 10;
-	drawCircularGauge(dev, 120, 110, 100, 5, 290, 350, remote_battery * 10, BLUE, RED);
+	drawCircularGauge(dev, 120, 110, 100, 5, 290, 350, remote_battery, BLUE, RED);
 
 
 	// Remote is Charging
