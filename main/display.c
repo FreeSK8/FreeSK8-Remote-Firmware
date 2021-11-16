@@ -292,12 +292,12 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height, 
 
 		// Odometer
 		{
-			if (user_settings->display_mph) sprintf((char *)ascii, "%04.2fmi", esc_telemetry.tachometer_abs / 1000.0 * KTOM);
-			else sprintf((char *)ascii, "%04.2fkm", esc_telemetry.tachometer_abs / 1000.0);
-			fontWidth = 2;
-			fontHeight = 2;
+			if (user_settings->display_mph) sprintf((char *)ascii, "%03.1fmi", esc_telemetry.tachometer_abs / 1000.0 * KTOM);
+			else sprintf((char *)ascii, "%04.1fkm", esc_telemetry.tachometer_abs / 1000.0);
+			fontWidth = 3;
+			fontHeight = 3;
 			{
-				ypos = 145;
+				ypos = 135;
 				xpos = (width - (strlen((char *)ascii) * 6 /*font1 multiplier*/ * fontWidth)) / 2;
 				lcdSetFontDirection(dev, DIRECTION0);
 			}
@@ -307,11 +307,11 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height, 
 
 		// Voltage
 		{
-			fontWidth = 2;
-			fontHeight = 2;
+			fontWidth = 3;
+			fontHeight = 3;
 			sprintf((char *)ascii, " %3.1fV ", esc_telemetry.v_in);
 			{
-				ypos = 170;
+				ypos = 165;
 				xpos = (width - (strlen((char *)ascii) * 6 /*font1 multiplier*/ * fontWidth)) / 2;
 				lcdSetFontDirection(dev, DIRECTION0);
 			}
@@ -338,7 +338,7 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height, 
 				fontHeight = 5;
 				sprintf((char *)ascii, "%02d", speed_now);
 				{
-					ypos = 60;
+					ypos = 50;
 					xpos = (width - (strlen((char *)ascii) * 8 * fontWidth)) / 2;
 					lcdSetFontDirection(dev, DIRECTION0);
 				}
