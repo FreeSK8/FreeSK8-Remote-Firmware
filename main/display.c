@@ -15,7 +15,7 @@ static inline uint8_t asigmoidal(uint16_t value, uint16_t min_value, uint16_t ma
 	uint16_t value_now = value;
 	if (value_now < min_value) value_now = min_value;
 	if (value_now > max_value) value_now = max_value;
-	uint8_t result = 103 - (90 / pow(1 + pow(1.56 * (value_now - min_value)/(max_value - min_value),1.5), 3));
+	uint8_t result = 105 - (100 / pow(1 + pow(1.56 * (value_now - min_value)/(max_value - min_value),1.5), 3));
 	return result > 100 ? 100 : result;
 }
 
