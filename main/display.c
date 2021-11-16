@@ -783,9 +783,6 @@ TickType_t drawAlert(TFT_t * dev, FontxFile *fx, uint16_t p_color, char * title,
 
 TickType_t drawSetupMenu(TFT_t * dev, FontxFile *fx, user_settings_t *user_settings, uint8_t current_index) {
 	static const int width = 240;
-	static bool first_draw = true;
-	static uint8_t previous_index = 255;
-	static user_settings_t previous_settings;
 	static const uint8_t y_line_height = 25;
 
 	TickType_t startTick, endTick, diffTick;
@@ -799,123 +796,103 @@ TickType_t drawSetupMenu(TFT_t * dev, FontxFile *fx, user_settings_t *user_setti
 	uint8_t ascii[20];
 	uint16_t color;
 
-	if (first_draw)
-	{
-		lcdSetFontFill(dev, BLACK);
-		lcdSetFontDirection(dev, DIRECTION0);
-		/* TODO: No room to draw "OSRR Setup"
-		sprintf((char *)ascii, "Setup");
-		ypos = 15;
-		xpos = (width - (strlen((char *)ascii) * 8 * fontWidth)) / 2;
-		color = YELLOW;
-		lcdDrawString2(dev, fontHeight, fontWidth, xpos, ypos, ascii, color);
-		*/
+	// Clear display buffer
+	lcdFillScreen(dev, BLACK);
+
+	// Draw menu title
+	lcdSetFontFill(dev, BLACK);
+	lcdSetFontDirection(dev, DIRECTION0);
+	sprintf((char *)ascii, "Setup");
+	ypos = 15;
+	xpos = (width - (strlen((char *)ascii) * 8 * fontWidth)) / 2;
+	color = YELLOW;
+	lcdDrawString2(dev, fontHeight, fontWidth, xpos, ypos, ascii, color);
+
+	// Get font size
+	GetFontx(fx, 0, buffer, &fontWidth, &fontHeight);
+
+	// Set first menu item position
+	ypos = 90;
+
+	// Draw 5 menu items
+	// Two items above current selection and two below when possible
+	int render_index = current_index - 2;
+	if (render_index < 0) render_index = 0;
+	for (int i=0; i<5; ++i, ++render_index, ypos += y_line_height) {
+		switch(render_index) {
+			case SETTING_PIEZO:
+				if (current_index == SETTING_PIEZO) color = WHITE;
+				else color = GRAY;
+				if (user_settings->disable_piezo) sprintf((char *)ascii, "Piezo: OFF");
+				else sprintf((char *)ascii, "Piezo: ON");
+				xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
+				lcdDrawString(dev, fx, xpos, ypos, ascii, color);
+			break;
+			case SETTING_BUZZER:
+				if (current_index == SETTING_BUZZER) color = WHITE;
+				else color = GRAY;
+				if (user_settings->disable_buzzer) sprintf((char *)ascii, "Haptic: OFF");
+				else sprintf((char *)ascii, "Haptic: ON");
+				xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
+				lcdDrawString(dev, fx, xpos, ypos, ascii, color);
+			break;
+			case SETTING_SPEED:
+				if (current_index == SETTING_SPEED) color = WHITE;
+				else color = GRAY;
+				if (user_settings->display_mph) sprintf((char *)ascii, "Speed: MPH");
+				else sprintf((char *)ascii, "Speed: KPH");
+				xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
+				lcdDrawString(dev, fx, xpos, ypos, ascii, color);
+			break;
+			case SETTING_TEMP:
+				if (current_index == SETTING_TEMP) color = WHITE;
+				else color = GRAY;
+				if (user_settings->dispaly_fahrenheit) sprintf((char *)ascii, "Temp: Fahrenheit");
+				else sprintf((char *)ascii, "Temp: Celsius");
+				xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
+				lcdDrawString(dev, fx, xpos, ypos, ascii, color);
+			break;
+			case SETTING_THROTTLE:
+				if (current_index == SETTING_THROTTLE) color = WHITE;
+				else color = GRAY;
+				if (user_settings->throttle_reverse) sprintf((char *)ascii, "Throttle: Reverse");
+				else sprintf((char *)ascii, "Throttle: Forward");
+				xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
+				lcdDrawString(dev, fx, xpos, ypos, ascii, color);
+			break;
+			case SETTING_MODEL:
+				if (current_index == SETTING_MODEL) color = WHITE;
+				else color = GRAY;
+				switch (user_settings->remote_model) {
+					case MODEL_UNDEFINED:
+						sprintf((char *)ascii, "Model: NotSet");
+						break;
+					case MODEL_ALBERT:
+						sprintf((char *)ascii, "Model: Albert");
+						break;
+					case MODEL_BRUCE:
+						sprintf((char *)ascii, "Model: Bruce");
+						break;
+					case MODEL_CLINT:
+						sprintf((char *)ascii, "Model: Clint");
+						break;
+					case MODEL_CUSTOM:
+						sprintf((char *)ascii, "Model: Custom");
+						break;
+				}
+				xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
+				lcdDrawString(dev, fx, xpos, ypos, ascii, color);
+			break;
+			case SETTING_LEFTY:
+				if (current_index == SETTING_LEFTY) color = WHITE;
+				else color = GRAY;
+				if (user_settings->left_handed) sprintf((char *)ascii, "Lefty: True");
+				else sprintf((char *)ascii, "Lefty: False");
+				xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
+				lcdDrawString(dev, fx, xpos, ypos, ascii, color);
+			break;
+		}
 	}
-
-	ypos = 42;
-	if (previous_index != current_index || memcmp(&previous_settings, user_settings, sizeof(user_settings_t)) != 0 )
-	{
-		// Get font size
-		GetFontx(fx, 0, buffer, &fontWidth, &fontHeight);
-
-		if (current_index == SETTING_PIEZO || previous_index == SETTING_PIEZO || first_draw)
-		{
-			if (current_index == SETTING_PIEZO) color = WHITE;
-			else color = GRAY;
-			if (user_settings->disable_piezo) sprintf((char *)ascii, "Piezo: OFF");
-			else sprintf((char *)ascii, " Piezo: ON ");
-			xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
-			lcdDrawString(dev, fx, xpos, ypos, ascii, color);
-		}
-
-		ypos += y_line_height;
-		if (current_index == SETTING_BUZZER || previous_index == SETTING_BUZZER || first_draw)
-		{
-			if (current_index == SETTING_BUZZER) color = WHITE;
-			else color = GRAY;
-			if (user_settings->disable_buzzer) sprintf((char *)ascii, "Haptic: OFF");
-			else sprintf((char *)ascii, " Haptic: ON ");
-			xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
-			lcdDrawString(dev, fx, xpos, ypos, ascii, color);
-		}
-
-		ypos += y_line_height;
-		if (current_index == SETTING_SPEED || previous_index == SETTING_SPEED || first_draw)
-		{
-			if (current_index == SETTING_SPEED) color = WHITE;
-			else color = GRAY;
-			if (user_settings->display_mph) sprintf((char *)ascii, " Speed: MPH ");
-			else sprintf((char *)ascii, " Speed: KPH ");
-			xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
-			lcdDrawString(dev, fx, xpos, ypos, ascii, color);
-		}
-
-		ypos += y_line_height;
-		if (current_index == SETTING_TEMP || previous_index == SETTING_TEMP || first_draw)
-		{
-			if (current_index == SETTING_TEMP) color = WHITE;
-			else color = GRAY;
-			if (user_settings->dispaly_fahrenheit) sprintf((char *)ascii, "Temp: Fahrenheit");
-			else sprintf((char *)ascii, "  Temp: Celsius  ");
-			xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
-			lcdDrawString(dev, fx, xpos, ypos, ascii, color);
-		}
-
-		ypos += y_line_height;
-		if (current_index == SETTING_THROTTLE || previous_index == SETTING_THROTTLE || first_draw)
-		{
-			if (current_index == SETTING_THROTTLE) color = WHITE;
-			else color = GRAY;
-			if (user_settings->throttle_reverse) sprintf((char *)ascii, " Throttle: Reverse ");
-			else sprintf((char *)ascii, " Throttle: Forward ");
-			xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
-			lcdDrawString(dev, fx, xpos, ypos, ascii, color);
-		}
-
-		ypos += y_line_height;
-		if (current_index == SETTING_MODEL || previous_index == SETTING_MODEL || first_draw)
-		{
-			if (current_index == SETTING_MODEL) color = WHITE;
-			else color = GRAY;
-			switch (user_settings->remote_model) {
-				case MODEL_UNDEFINED:
-					sprintf((char *)ascii, "Model: NotSet");
-					break;
-				case MODEL_ALBERT:
-					sprintf((char *)ascii, "Model: Albert");
-					break;
-				case MODEL_BRUCE:
-					sprintf((char *)ascii, " Model: Bruce ");
-					break;
-				case MODEL_CLINT:
-					sprintf((char *)ascii, " Model: Clint ");
-					break;
-				case MODEL_CUSTOM:
-					sprintf((char *)ascii, "Model: Custom");
-					break;
-			}
-			xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
-			lcdDrawString(dev, fx, xpos, ypos, ascii, color);
-		}
-
-		ypos += y_line_height;
-		if (current_index == SETTING_LEFTY || previous_index == SETTING_LEFTY || first_draw)
-		{
-			if (current_index == SETTING_LEFTY) color = WHITE;
-			else color = GRAY;
-			if (user_settings->left_handed) sprintf((char *)ascii, " Lefty: True ");
-			else sprintf((char *)ascii, " Lefty: False ");
-			xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
-			lcdDrawString(dev, fx, xpos, ypos, ascii, color);
-		}
-
-		// Update previous values for next iteration
-		previous_index = current_index;
-		previous_settings = (*user_settings);
-	}
-
-	// First draw only happens once
-	first_draw = false;
 
 	lcdUpdate(dev);
 
