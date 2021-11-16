@@ -450,6 +450,15 @@ static void i2c_task(void *arg)
 			is_throttle_idle = false;
 		}
 
+		// Check for off center joystick while throttle is locked
+		if (is_throttle_locked) {
+			uint8_t joystick_now = map(adc_raw_joystick, 0, 1700, 0, 255);
+			if (joystick_now < CENTER_JOYSTICK - JOYSTICK_OFF_CENTER || joystick_now > CENTER_JOYSTICK + JOYSTICK_OFF_CENTER) {
+				if (!my_user_settings.disable_piezo) melody_play(MELODY_CHRIPS, false);
+				haptic_play(MELODY_CHRIPS, false);
+			}
+		}
+
 		adc_raw_battery_level = ADS1015_readADC_SingleEnded(2);
 		adc_raw_joystick_2 = ADS1015_readADC_SingleEnded(1);
 		adc_raw_rssi = ADS1015_readADC_SingleEnded(3);
@@ -1076,6 +1085,11 @@ void ST7789_Task(void *pvParameters)
 		// Check if ESC timeout alert is necessary
 		if (!esc_timeout_occured && esc_last_responded != 0) {
 			esc_timeout_occured = (xTaskGetTickCount() - esc_last_responded)*portTICK_RATE_MS > 2000;
+			// Trigger melody when timeout is noticed
+			if (esc_timeout_occured && !esc_timeout_dismissed) {
+				if (!my_user_settings.disable_piezo) melody_play(MELODY_CHRIPS, true);
+				haptic_play(MELODY_CHRIPS, true);
+			}
 		}
 
 		// Draw a blank screen when the remote is idle
@@ -1124,7 +1138,7 @@ void ST7789_Task(void *pvParameters)
 			else if (!alert_visible && esc_timeout_occured && !esc_timeout_dismissed) {
 
 				lcdFillScreen(&dev, BLACK);
-				drawAlert(&dev, fx24G, RED, "WARNING", "Signal", "was lost", "for 2 or more", "seconds");
+				drawAlert(&dev, fx24G, RED, "WARNING", "Telemetry was", "not received", "for 2 or more", "seconds");
 
 				display_second_screen = false;
 			}
