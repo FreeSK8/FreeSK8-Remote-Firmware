@@ -280,19 +280,6 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height, 
 	}
 	else if (!alert_visible)
 	{
-		// Throttle
-		double joystick_position = 0;
-		if (joystick_value_mapped > 129)
-		{
-			joystick_position = (joystick_value_mapped - 128) / 128.0;
-		} else if (joystick_value_mapped < 125)
-		{
-			joystick_position = 1.0 - (joystick_value_mapped / 128.0);
-		} else {
-			joystick_position = 0;
-		}
-		drawCircularGauge(dev, 120, 110, 85, 5, 0, 90, 100-(joystick_position * 100), BLACK, PURPLE);
-
 		// Odometer
 		{
 			if (user_settings->display_mph) sprintf((char *)ascii, "%03.1fmi", esc_telemetry.tachometer_abs / 1000.0 * KTOM);
@@ -351,6 +338,19 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height, 
 				lcdDrawString2(dev, fontHeight, fontWidth, xpos, ypos, ascii, color);
 			}
 		}
+
+		// Throttle
+		double joystick_position = 0;
+		if (joystick_value_mapped > 129)
+		{
+			joystick_position = (joystick_value_mapped - 128) / 128.0;
+		} else if (joystick_value_mapped < 125)
+		{
+			joystick_position = 1.0 - (joystick_value_mapped / 128.0);
+		} else {
+			joystick_position = 0;
+		}
+		drawCircularGauge(dev, 120, 110, 85, 5, 0, 90, 100-(joystick_position * 100), BLACK, PURPLE);
 	}
 
 	//Remote Battery
