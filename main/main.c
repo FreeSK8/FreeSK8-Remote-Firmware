@@ -272,6 +272,7 @@ static void gpio_input_task(void* arg)
 				if (esc_timeout_occured) {
 					esc_timeout_occured = false;
 					esc_timeout_dismissed = true;
+					esc_last_responded = 0;
 				}
 
 				// Clear alert or change display
