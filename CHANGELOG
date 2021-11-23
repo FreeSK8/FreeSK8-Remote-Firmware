@@ -1,3 +1,13 @@
+v0.3.0
+
+* Scrollable setup menu
+* Piezo & Haptic alert when throttle is locked
+* Piezo & Haptic alert when signal is lost
+* Display alert when signal is lost
+* Display alert when OSRR faults
+* Fix fuzz in display offset area
+* Fixes and improvements to display elements
+
 v0.2.1
 
 * Disallow Throttle Lock in Setup Menu
