@@ -1562,9 +1562,9 @@ void line_test(TFT_t * dev, uint16_t x, uint16_t y, uint16_t size, uint16_t * co
 	if (x+size > dev->_width) return;
 	if (y >= dev->_height) return;
 
-	uint16_t _x1 = x + dev->_offsetx;
+	uint16_t _x1 = x;
 	uint16_t _x2 = _x1 + size;
-	uint16_t _y1 = y + dev->_offsety;
+	uint16_t _y1 = y;
 	uint16_t _y2 = _y1;
 
 	spi_master_write_command(dev, 0x2A);	// set column(x) address

@@ -4,17 +4,19 @@
 extern long map(long x, long in_min, long in_max, long out_min, long out_max);
 
 static bool fault_indicator_displayed = false;
-static bool was_esc_responding = false;
 
 /**
- * Asymmetric sigmoidal approximation
+ * Modified Asymmetric sigmoidal approximation
  * https://www.desmos.com/calculator/oyhpsu8jnw
  *
  * c - c / [1 + (k*x/v)^4.5]^3
  */
-static inline uint8_t asigmoidal(uint16_t voltage, uint16_t minVoltage, uint16_t maxVoltage) {
-	uint8_t result = 101 - (101 / pow(1 + pow(1.33 * (voltage - minVoltage)/(maxVoltage - minVoltage) ,4.5), 3));
-	return result >= 100 ? 100 : result;
+static inline uint8_t asigmoidal(uint16_t value, uint16_t min_value, uint16_t max_value) {
+	uint16_t value_now = value;
+	if (value_now < min_value) value_now = min_value;
+	if (value_now > max_value) value_now = max_value;
+	uint8_t result = 105 - (100 / pow(1 + pow(1.56 * (value_now - min_value)/(max_value - min_value),1.5), 3));
+	return result > 100 ? 100 : result;
 }
 
 TickType_t drawScreenDeveloper(TFT_t * dev, FontxFile *fx, int width, int height) {
@@ -152,33 +154,6 @@ const int adc_raw_battery_maximum = 720; // Battery at full charge
 const int adc_raw_rssi_maximum = 1092; // Maximum observed RSSI
 const int adc_raw_rssi_minimum = 519; // Lowest oberseved RSSI
 static uint16_t adc_raw_rssi_avg = 0; // Average displayed RSSI value
-static double rssi_log_previous;
-static uint8_t batt_pixel_previous;
-static uint8_t gpio_usb_detect_previous;
-static int tachometer_abs_previous = -1000;
-static double esc_vin_previous = 0;
-static double esc_battery_previous = 0;
-static int speed_now_previous = -1;
-static uint8_t remote_battery_previous = 0;
-static uint8_t joystick_value_mapped_previous = 0;
-static double temp_mos_previous = -1;
-static double temp_motor_previous = -1;
-void resetPreviousValues()
-{
-	tachometer_abs_previous = -1000;
-	rssi_log_previous = 0;
-	batt_pixel_previous = 0;
-	gpio_usb_detect_previous = 0;
-	esc_vin_previous = 0;
-	esc_battery_previous = 0;
-	fault_indicator_displayed = false;
-	speed_now_previous = -1;
-	joystick_value_mapped_previous = 0;
-	was_esc_responding = false;
-	remote_battery_previous = 0;
-	temp_mos_previous = -1;
-	temp_motor_previous = -1;
-}
 
 void drawCircularGauge(TFT_t * dev, uint8_t x, uint8_t y, uint8_t radius, uint8_t width, uint16_t start_angle, uint16_t end_angle, uint8_t percentage, uint16_t color_on, uint16_t color_off)
 {
@@ -263,14 +238,12 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height, 
 		alert_visible = false;
 		lcdDrawFillRect(dev, 32, 50, 210, 185, BLACK);
 		//TODO: lol this is slow af: lcdDrawFillCircle(dev, 120, 120, 100, BLACK);
-		resetPreviousValues(); // Force all round gauges to redraw after alert
 	}
 	if (alert_show && !alert_visible)
 	{
 		alert_visible = true;
 		lcdDrawFillRect(dev, 22, 50, 200, 185, BLACK);
 		//TODO: lol this is slow af: lcdDrawFillCircle(dev, 120, 120, 100, GREEN);
-		resetPreviousValues(); // Force all round gauges to redraw after alert
 
 		fontWidth = 2;
 		fontHeight = 2;
@@ -307,43 +280,14 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height, 
 	}
 	else if (!alert_visible)
 	{
-		// Throttle
-		double joystick_position = 0;
-		if (joystick_value_mapped > 129)
-		{
-			joystick_position = (joystick_value_mapped - 128) / 128.0;
-		} else if (joystick_value_mapped < 125)
-		{
-			joystick_position = 1.0 - (joystick_value_mapped / 128.0);
-		} else {
-			joystick_position = 0;
-		}
-		if (joystick_value_mapped_previous != joystick_value_mapped)
-		{
-			joystick_value_mapped_previous = joystick_value_mapped;
-			drawCircularGauge(dev, 120, 110, 85, 5, 0, 90, 100-(joystick_position * 100), BLACK, PURPLE);
-		}
-
 		// Odometer
-		// Do not update if less than 0.01km distance
-		if (fabs(esc_telemetry.tachometer_abs / 1000.0 - tachometer_abs_previous / 1000.0) > 0.01)
 		{
-			tachometer_abs_previous = esc_telemetry.tachometer_abs;
-			if (user_settings->display_mph) sprintf((char *)ascii, "%04.2fmi", esc_telemetry.tachometer_abs / 1000.0 * KTOM);
-			else sprintf((char *)ascii, "%04.2fkm", esc_telemetry.tachometer_abs / 1000.0);
-			/*
+			if (user_settings->display_mph) sprintf((char *)ascii, "%03.1fmi", esc_telemetry.tachometer_abs / 1000.0 * KTOM);
+			else sprintf((char *)ascii, "%03.1fkm", esc_telemetry.tachometer_abs / 1000.0);
+			fontWidth = 3;
+			fontHeight = 3;
 			{
-				ypos = 165;
-				xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
-				lcdSetFontDirection(dev, DIRECTION0);
-			}
-			color = WHITE;
-			lcdDrawString(dev, fx, xpos, ypos, ascii, color);
-			*/
-			fontWidth = 2;
-			fontHeight = 2;
-			{
-				ypos = 145;
+				ypos = 135;
 				xpos = (width - (strlen((char *)ascii) * 6 /*font1 multiplier*/ * fontWidth)) / 2;
 				lcdSetFontDirection(dev, DIRECTION0);
 			}
@@ -352,26 +296,12 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height, 
 		}
 
 		// Voltage
-		// Only update if we've changed more than 0.1V (displayed)
-		if (fabs(esc_vin_previous - esc_telemetry.v_in) > 0.1)
 		{
-			esc_vin_previous = esc_telemetry.v_in;
-			/*
+			fontWidth = 3;
+			fontHeight = 3;
 			sprintf((char *)ascii, " %3.1fV ", esc_telemetry.v_in);
 			{
-				ypos = 190;
-				xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
-				lcdSetFontDirection(dev, DIRECTION0);
-			}
-			color = WHITE;
-			lcdSetFontFill(dev, BLACK);
-			lcdDrawString(dev, fx, xpos, ypos, ascii, color);
-			*/
-			fontWidth = 2;
-			fontHeight = 2;
-			sprintf((char *)ascii, " %3.1fV ", esc_telemetry.v_in);
-			{
-				ypos = 170;
+				ypos = 165;
 				xpos = (width - (strlen((char *)ascii) * 6 /*font1 multiplier*/ * fontWidth)) / 2;
 				lcdSetFontDirection(dev, DIRECTION0);
 			}
@@ -392,16 +322,13 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height, 
 			if (speed_now > 99) speed_now -= 100;
 			// Check if ESC is responding
 			bool is_esc_responding = (xTaskGetTickCount() - esc_last_responded)*portTICK_RATE_MS < 1000;
-			// Update only when changing or esc starts/stops responding
-			if (speed_now != speed_now_previous || is_esc_responding != was_esc_responding)
+
 			{
-				was_esc_responding = is_esc_responding;
 				fontWidth = 6;
 				fontHeight = 5;
-				speed_now_previous = speed_now;
 				sprintf((char *)ascii, "%02d", speed_now);
 				{
-					ypos = 60;
+					ypos = 50;
 					xpos = (width - (strlen((char *)ascii) * 8 * fontWidth)) / 2;
 					lcdSetFontDirection(dev, DIRECTION0);
 				}
@@ -411,23 +338,29 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height, 
 				lcdDrawString2(dev, fontHeight, fontWidth, xpos, ypos, ascii, color);
 			}
 		}
+
+		// Throttle
+		double joystick_position = 0;
+		if (joystick_value_mapped > 129)
+		{
+			joystick_position = (joystick_value_mapped - 128) / 128.0;
+		} else if (joystick_value_mapped < 125)
+		{
+			joystick_position = 1.0 - (joystick_value_mapped / 128.0);
+		} else {
+			joystick_position = 0;
+		}
+		drawCircularGauge(dev, 120, 110, 85, 5, 0, 90, 100-(joystick_position * 100), BLACK, PURPLE);
 	}
 
 	//Remote Battery
 	//uint8_t remote_battery = map(adc_raw_battery_level, adc_raw_battery_minimum, adc_raw_battery_maximum, 1, 10);
 	uint8_t remote_battery = asigmoidal(adc_raw_battery_level, adc_raw_battery_minimum, adc_raw_battery_maximum);
-	remote_battery /= 10;
-	if (remote_battery != remote_battery_previous)
-	{
-		remote_battery_previous = remote_battery;
-		drawCircularGauge(dev, 120, 110, 100, 5, 290, 350, remote_battery * 10, BLUE, RED);
-	}
+	drawCircularGauge(dev, 120, 110, 100, 5, 290, 350, remote_battery, BLUE, RED);
 
 
 	// Remote is Charging
-	if (gpio_usb_detect != gpio_usb_detect_previous)
 	{
-		gpio_usb_detect_previous = gpio_usb_detect;
 		if (gpio_usb_detect) {
 			//TODO: Draw charging icon
 			lcdDrawString(dev, fx, 120 - 6, 24, (unsigned char*)"+", RED);
@@ -457,10 +390,7 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height, 
 
 	uint8_t rssi_mapped = map(adc_raw_rssi_avg, adc_raw_rssi_minimum, adc_raw_rssi_maximum, 10, 100);
 	double rssi_log = log10(rssi_mapped) - 1.0; // Results in 0.0 to 1.0
-	// Only update if value changes more than 10%
-	if (fabs(rssi_log - rssi_log_previous) > 0.1)
 	{
-		rssi_log_previous = rssi_log;
 		if (rssi_log < 0.1) rssi_log = 0.1; // rssi_log is minimum 10% to show 1 dot on the LCD
 		drawCircularGauge(dev, 120, 110, 100, 5, 10, 70, 100-/*invert*/(rssi_log*100), BLACK, GREEN);
 	}
@@ -468,13 +398,7 @@ TickType_t drawScreenPrimary(TFT_t * dev, FontxFile *fx, int width, int height, 
 
 	// Vehicle Battery
 	// Draw vehicle battery if it's changed more than 5%
-	if (fabs(esc_battery_previous - esc_telemetry.battery_level) > 0.05)
-	{
-		esc_battery_previous = esc_telemetry.battery_level;
-
-		// Battery
-		drawCircularGauge(dev, 120, 110, 100, 5, 90, 270, esc_telemetry.battery_level * 100, BLUE, RED);
-	}
+	drawCircularGauge(dev, 120, 110, 100, 5, 90, 270, esc_telemetry.battery_level * 100, BLUE, RED);
 
 	lcdUpdate(dev);
 
@@ -504,18 +428,11 @@ TickType_t drawScreenSecondary(TFT_t * dev, FontxFile *fx, int width, int height
 	//Remote Battery
 	//uint8_t remote_battery = map(adc_raw_battery_level, adc_raw_battery_minimum, adc_raw_battery_maximum, 1, 10);
 	uint8_t remote_battery = asigmoidal(adc_raw_battery_level, adc_raw_battery_minimum, adc_raw_battery_maximum);
-	remote_battery /= 10;
-	if (remote_battery != remote_battery_previous)
-	{
-		remote_battery_previous = remote_battery;
-		drawCircularGauge(dev, 120, 110, 100, 5, 290, 350, remote_battery * 10, BLUE, RED);
-	}
+	drawCircularGauge(dev, 120, 110, 100, 5, 290, 350, remote_battery, BLUE, RED);
 
 
 	// Remote is Charging
-	if (gpio_usb_detect != gpio_usb_detect_previous)
 	{
-		gpio_usb_detect_previous = gpio_usb_detect;
 		if (gpio_usb_detect) {
 			//TODO: Draw charging icon
 			lcdDrawString(dev, fx, 120 - 6, 24, (unsigned char*)"+", RED);
@@ -534,10 +451,7 @@ TickType_t drawScreenSecondary(TFT_t * dev, FontxFile *fx, int width, int height
 
 	uint8_t rssi_mapped = map(adc_raw_rssi_avg, adc_raw_rssi_minimum, adc_raw_rssi_maximum, 10, 100);
 	double rssi_log = log10(rssi_mapped) - 1.0; // Results in 0.0 to 1.0
-	// Only update if value changes more than 10%
-	if (fabs(rssi_log - rssi_log_previous) > 0.1)
 	{
-		rssi_log_previous = rssi_log;
 		if (rssi_log < 0.1) rssi_log = 0.1; // rssi_log is minimum 10% to show 1 dot on the LCD
 		drawCircularGauge(dev, 120, 110, 100, 5, 10, 70, 100-/*invert*/(rssi_log*100), BLACK, GREEN);
 	}
@@ -548,9 +462,7 @@ TickType_t drawScreenSecondary(TFT_t * dev, FontxFile *fx, int width, int height
 	static double display_temperature;
 
 	// ESC Temp
-	if (fabs(esc_telemetry.temp_mos - temp_mos_previous) > 0.5)
 	{
-		temp_mos_previous = esc_telemetry.temp_mos;
 		if (user_settings->dispaly_fahrenheit) {
 			esc_temp_mapped = map(CTOF(esc_telemetry.temp_mos), CTOF(0), CTOF(100), 1, 20);
 			display_temperature = CTOF(esc_telemetry.temp_mos);
@@ -576,9 +488,7 @@ TickType_t drawScreenSecondary(TFT_t * dev, FontxFile *fx, int width, int height
 	}
 
 	// Motor Temp
-	if (fabs(esc_telemetry.temp_motor - temp_motor_previous) > 0.5)
 	{
-		temp_motor_previous = esc_telemetry.temp_motor;
 		if (user_settings->dispaly_fahrenheit) {
 			motor_temp_mapped = map(CTOF(esc_telemetry.temp_motor), CTOF(0), CTOF(100), 1, 20);
 			display_temperature = CTOF(esc_telemetry.temp_motor);
@@ -611,12 +521,9 @@ TickType_t drawScreenSecondary(TFT_t * dev, FontxFile *fx, int width, int height
 	// Efficiency and Range
 	static double efficiency = 0;
 	static double range = 0;
-	// Do not update if less than 0.01km distance
-	if (fabs(esc_telemetry.tachometer_abs / 1000.0 - tachometer_abs_previous / 1000.0) > 0.01)
 	{
 		// Efficiency
 		{
-			tachometer_abs_previous = esc_telemetry.tachometer_abs;
 			if (user_settings->display_mph) efficiency = (esc_telemetry.watt_hours - esc_telemetry.watt_hours_charged) / (esc_telemetry.tachometer_abs / 1000.0 * KTOM);
 			else efficiency = (esc_telemetry.watt_hours - esc_telemetry.watt_hours_charged) / (esc_telemetry.tachometer_abs / 1000.0);
 			if (isnan(efficiency)) efficiency = 0;
@@ -672,13 +579,7 @@ TickType_t drawScreenSecondary(TFT_t * dev, FontxFile *fx, int width, int height
 
 	// Vehicle Battery
 	// Draw vehicle battery if it's changed more than 5%
-	if (fabs(esc_battery_previous - esc_telemetry.battery_level) > 0.05)
-	{
-		esc_battery_previous = esc_telemetry.battery_level;
-
-		// Battery
-		drawCircularGauge(dev, 120, 110, 100, 5, 90, 270, esc_telemetry.battery_level * 100, BLUE, RED);
-	}
+	drawCircularGauge(dev, 120, 110, 100, 5, 90, 270, esc_telemetry.battery_level * 100, BLUE, RED);
 
 	lcdUpdate(dev);
 
@@ -883,9 +784,6 @@ TickType_t drawAlert(TFT_t * dev, FontxFile *fx, uint16_t p_color, char * title,
 
 TickType_t drawSetupMenu(TFT_t * dev, FontxFile *fx, user_settings_t *user_settings, uint8_t current_index) {
 	static const int width = 240;
-	static bool first_draw = true;
-	static uint8_t previous_index = 255;
-	static user_settings_t previous_settings;
 	static const uint8_t y_line_height = 25;
 
 	TickType_t startTick, endTick, diffTick;
@@ -899,123 +797,103 @@ TickType_t drawSetupMenu(TFT_t * dev, FontxFile *fx, user_settings_t *user_setti
 	uint8_t ascii[20];
 	uint16_t color;
 
-	if (first_draw)
-	{
-		lcdSetFontFill(dev, BLACK);
-		lcdSetFontDirection(dev, DIRECTION0);
-		/* TODO: No room to draw "OSRR Setup"
-		sprintf((char *)ascii, "Setup");
-		ypos = 15;
-		xpos = (width - (strlen((char *)ascii) * 8 * fontWidth)) / 2;
-		color = YELLOW;
-		lcdDrawString2(dev, fontHeight, fontWidth, xpos, ypos, ascii, color);
-		*/
+	// Clear display buffer
+	lcdFillScreen(dev, BLACK);
+
+	// Draw menu title
+	lcdSetFontFill(dev, BLACK);
+	lcdSetFontDirection(dev, DIRECTION0);
+	sprintf((char *)ascii, "Setup");
+	ypos = 15;
+	xpos = (width - (strlen((char *)ascii) * 8 * fontWidth)) / 2;
+	color = YELLOW;
+	lcdDrawString2(dev, fontHeight, fontWidth, xpos, ypos, ascii, color);
+
+	// Get font size
+	GetFontx(fx, 0, buffer, &fontWidth, &fontHeight);
+
+	// Set first menu item position
+	ypos = 90;
+
+	// Draw 5 menu items
+	// Two items above current selection and two below when possible
+	int render_index = current_index - 2;
+	if (render_index < 0) render_index = 0;
+	for (int i=0; i<5; ++i, ++render_index, ypos += y_line_height) {
+		switch(render_index) {
+			case SETTING_PIEZO:
+				if (current_index == SETTING_PIEZO) color = WHITE;
+				else color = GRAY;
+				if (user_settings->disable_piezo) sprintf((char *)ascii, "Piezo: OFF");
+				else sprintf((char *)ascii, "Piezo: ON");
+				xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
+				lcdDrawString(dev, fx, xpos, ypos, ascii, color);
+			break;
+			case SETTING_BUZZER:
+				if (current_index == SETTING_BUZZER) color = WHITE;
+				else color = GRAY;
+				if (user_settings->disable_buzzer) sprintf((char *)ascii, "Haptic: OFF");
+				else sprintf((char *)ascii, "Haptic: ON");
+				xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
+				lcdDrawString(dev, fx, xpos, ypos, ascii, color);
+			break;
+			case SETTING_SPEED:
+				if (current_index == SETTING_SPEED) color = WHITE;
+				else color = GRAY;
+				if (user_settings->display_mph) sprintf((char *)ascii, "Speed: MPH");
+				else sprintf((char *)ascii, "Speed: KPH");
+				xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
+				lcdDrawString(dev, fx, xpos, ypos, ascii, color);
+			break;
+			case SETTING_TEMP:
+				if (current_index == SETTING_TEMP) color = WHITE;
+				else color = GRAY;
+				if (user_settings->dispaly_fahrenheit) sprintf((char *)ascii, "Temp: Fahrenheit");
+				else sprintf((char *)ascii, "Temp: Celsius");
+				xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
+				lcdDrawString(dev, fx, xpos, ypos, ascii, color);
+			break;
+			case SETTING_THROTTLE:
+				if (current_index == SETTING_THROTTLE) color = WHITE;
+				else color = GRAY;
+				if (user_settings->throttle_reverse) sprintf((char *)ascii, "Throttle: Reverse");
+				else sprintf((char *)ascii, "Throttle: Forward");
+				xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
+				lcdDrawString(dev, fx, xpos, ypos, ascii, color);
+			break;
+			case SETTING_MODEL:
+				if (current_index == SETTING_MODEL) color = WHITE;
+				else color = GRAY;
+				switch (user_settings->remote_model) {
+					case MODEL_UNDEFINED:
+						sprintf((char *)ascii, "Model: NotSet");
+						break;
+					case MODEL_ALBERT:
+						sprintf((char *)ascii, "Model: Albert");
+						break;
+					case MODEL_BRUCE:
+						sprintf((char *)ascii, "Model: Bruce");
+						break;
+					case MODEL_CLINT:
+						sprintf((char *)ascii, "Model: Clint");
+						break;
+					case MODEL_CUSTOM:
+						sprintf((char *)ascii, "Model: Custom");
+						break;
+				}
+				xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
+				lcdDrawString(dev, fx, xpos, ypos, ascii, color);
+			break;
+			case SETTING_LEFTY:
+				if (current_index == SETTING_LEFTY) color = WHITE;
+				else color = GRAY;
+				if (user_settings->left_handed) sprintf((char *)ascii, "Lefty: True");
+				else sprintf((char *)ascii, "Lefty: False");
+				xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
+				lcdDrawString(dev, fx, xpos, ypos, ascii, color);
+			break;
+		}
 	}
-
-	ypos = 42;
-	if (previous_index != current_index || memcmp(&previous_settings, user_settings, sizeof(user_settings_t)) != 0 )
-	{
-		// Get font size
-		GetFontx(fx, 0, buffer, &fontWidth, &fontHeight);
-
-		if (current_index == SETTING_PIEZO || previous_index == SETTING_PIEZO || first_draw)
-		{
-			if (current_index == SETTING_PIEZO) color = WHITE;
-			else color = GRAY;
-			if (user_settings->disable_piezo) sprintf((char *)ascii, "Piezo: OFF");
-			else sprintf((char *)ascii, " Piezo: ON ");
-			xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
-			lcdDrawString(dev, fx, xpos, ypos, ascii, color);
-		}
-
-		ypos += y_line_height;
-		if (current_index == SETTING_BUZZER || previous_index == SETTING_BUZZER || first_draw)
-		{
-			if (current_index == SETTING_BUZZER) color = WHITE;
-			else color = GRAY;
-			if (user_settings->disable_buzzer) sprintf((char *)ascii, "Haptic: OFF");
-			else sprintf((char *)ascii, " Haptic: ON ");
-			xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
-			lcdDrawString(dev, fx, xpos, ypos, ascii, color);
-		}
-
-		ypos += y_line_height;
-		if (current_index == SETTING_SPEED || previous_index == SETTING_SPEED || first_draw)
-		{
-			if (current_index == SETTING_SPEED) color = WHITE;
-			else color = GRAY;
-			if (user_settings->display_mph) sprintf((char *)ascii, " Speed: MPH ");
-			else sprintf((char *)ascii, " Speed: KPH ");
-			xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
-			lcdDrawString(dev, fx, xpos, ypos, ascii, color);
-		}
-
-		ypos += y_line_height;
-		if (current_index == SETTING_TEMP || previous_index == SETTING_TEMP || first_draw)
-		{
-			if (current_index == SETTING_TEMP) color = WHITE;
-			else color = GRAY;
-			if (user_settings->dispaly_fahrenheit) sprintf((char *)ascii, "Temp: Fahrenheit");
-			else sprintf((char *)ascii, "  Temp: Celsius  ");
-			xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
-			lcdDrawString(dev, fx, xpos, ypos, ascii, color);
-		}
-
-		ypos += y_line_height;
-		if (current_index == SETTING_THROTTLE || previous_index == SETTING_THROTTLE || first_draw)
-		{
-			if (current_index == SETTING_THROTTLE) color = WHITE;
-			else color = GRAY;
-			if (user_settings->throttle_reverse) sprintf((char *)ascii, " Throttle: Reverse ");
-			else sprintf((char *)ascii, " Throttle: Forward ");
-			xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
-			lcdDrawString(dev, fx, xpos, ypos, ascii, color);
-		}
-
-		ypos += y_line_height;
-		if (current_index == SETTING_MODEL || previous_index == SETTING_MODEL || first_draw)
-		{
-			if (current_index == SETTING_MODEL) color = WHITE;
-			else color = GRAY;
-			switch (user_settings->remote_model) {
-				case MODEL_UNDEFINED:
-					sprintf((char *)ascii, "Model: NotSet");
-					break;
-				case MODEL_ALBERT:
-					sprintf((char *)ascii, "Model: Albert");
-					break;
-				case MODEL_BRUCE:
-					sprintf((char *)ascii, " Model: Bruce ");
-					break;
-				case MODEL_CLINT:
-					sprintf((char *)ascii, " Model: Clint ");
-					break;
-				case MODEL_CUSTOM:
-					sprintf((char *)ascii, "Model: Custom");
-					break;
-			}
-			xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
-			lcdDrawString(dev, fx, xpos, ypos, ascii, color);
-		}
-
-		ypos += y_line_height;
-		if (current_index == SETTING_LEFTY || previous_index == SETTING_LEFTY || first_draw)
-		{
-			if (current_index == SETTING_LEFTY) color = WHITE;
-			else color = GRAY;
-			if (user_settings->left_handed) sprintf((char *)ascii, " Lefty: True ");
-			else sprintf((char *)ascii, " Lefty: False ");
-			xpos = (width - (strlen((char *)ascii) * fontWidth)) / 2;
-			lcdDrawString(dev, fx, xpos, ypos, ascii, color);
-		}
-
-		// Update previous values for next iteration
-		previous_index = current_index;
-		previous_settings = (*user_settings);
-	}
-
-	// First draw only happens once
-	first_draw = false;
 
 	lcdUpdate(dev);
 

@@ -23,9 +23,11 @@
 
 #include "lib/haptic/haptic.h"
 
-const char * version = "0.2.1";
+const char * version = "0.3.0";
 
 #define ADC_BATTERY_MIN 525
+
+uint16_t adc_error_count = 0;
 
 int gyro_x, gyro_y, gyro_z;
 float accel_g_x;
@@ -34,10 +36,13 @@ float accel_g_z;
 
 bool is_remote_idle = true; //NOTE: Controlled by IMU
 bool display_second_screen = false;
-bool display_blank_now = false;
+bool display_blank_now = false; // Flag to clear display contents from outside display task
 
 bool is_throttle_idle = false;
 bool is_throttle_locked = false;
+
+bool esc_timeout_occured = false;
+bool esc_timeout_dismissed = false;
 
 TickType_t esc_last_responded = 0;
 TickType_t startTickThrottleIdle = 0;
@@ -127,8 +132,7 @@ static void piezo_test(void *arg)
 
     while (1) {
 		// Low Battery Alert
-		if (adc_raw_battery_level < ADC_BATTERY_MIN || adc_raw_battery_level == ADS1015_ERROR)
-		{
+		if (adc_raw_battery_level < ADC_BATTERY_MIN) {
 			melody_play(MELODY_GOTCHI_FAULT, false); //NOTE: disregard user preference
 			//NOTE: No Haptics PLEASE
 		}
@@ -225,6 +229,10 @@ static void gpio_input_task(void* arg)
 				// Reset idle throttle time with user button
 				startTickThrottleIdle = xTaskGetTickCount();
 			}
+			if ((ev.pin == GPIO_INPUT_IO_0) && (ev.event == BUTTON_HELD)) {
+				ESP_LOGI(__FUNCTION__, "User Button Held");
+				//NOTE: No action. Useful for debugging or custom functionality
+			}
 			if ((ev.pin == GPIO_INPUT_IO_0) && (ev.event == BUTTON_DOWN)) {
 				// User Button (SW3 on HW v1.2 PCB)
 				if (remote_in_setup_mode)
@@ -260,6 +268,13 @@ static void gpio_input_task(void* arg)
 				// No action desired when throttle is locked
 				if (is_throttle_locked) continue;
 
+				// Clear ESC timeout flag
+				if (esc_timeout_occured) {
+					esc_timeout_occured = false;
+					esc_timeout_dismissed = true;
+					esc_last_responded = 0;
+				}
+
 				// Clear alert or change display
 				if (alert_visible) alert_clear = true;
 				else
@@ -278,8 +293,6 @@ static void gpio_input_task(void* arg)
 				is_throttle_locked = !is_throttle_locked; // Toggle throttle lock
 				if (is_throttle_locked)
 				{
-					display_blank_now = true; // Clear display
-					display_second_screen = false; // Request primary screen with throttle locked
 					if (!my_user_settings.disable_piezo) melody_play(MELODY_GPS_LOST, true);
 					haptic_play(MELODY_GPS_LOST, true);
 				} else {
@@ -438,9 +451,23 @@ static void i2c_task(void *arg)
 			is_throttle_idle = false;
 		}
 
+		// Check for off center joystick while throttle is locked
+		if (is_throttle_locked) {
+			uint8_t joystick_now = map(adc_raw_joystick, 0, 1700, 0, 255);
+			if (joystick_now < CENTER_JOYSTICK - JOYSTICK_OFF_CENTER || joystick_now > CENTER_JOYSTICK + JOYSTICK_OFF_CENTER) {
+				if (!my_user_settings.disable_piezo) melody_play(MELODY_CHRIPS, false);
+				haptic_play(MELODY_CHRIPS, false);
+			}
+		}
+
 		adc_raw_battery_level = ADS1015_readADC_SingleEnded(2);
 		adc_raw_joystick_2 = ADS1015_readADC_SingleEnded(1);
 		adc_raw_rssi = ADS1015_readADC_SingleEnded(3);
+
+		if (adc_raw_joystick == ADS1015_ERROR || adc_raw_battery_level == ADS1015_ERROR || adc_raw_joystick_2 == ADS1015_ERROR || adc_raw_rssi == ADS1015_ERROR)
+		{
+			++adc_error_count;
+		}
 
 		/* IMU */
 		mpu6050_get_rotation(&gyro);
@@ -462,8 +489,11 @@ static void i2c_task(void *arg)
 		gyro_x = gyro.gyro_x;
 		gyro_y = gyro.gyro_y;
 		gyro_z = gyro.gyro_z;
-		//ESP_LOGI(__FUNCTION__, "ADC joy1:%d joy2:%d batt:%d rssi:%d IMU x:%.3f y:%.3f z:%.3f t:%.3f (%d)", adc_raw_joystick, adc_raw_joystick_2, adc_raw_battery_level, adc_raw_rssi, accel_g_x, accel_g_y, accel_g_z, acceleration, (acceleration > 0.9 && acceleration < 1.15));
-		//ESP_LOGI(__FUNCTION__, "IMU x:%d y:%d z:%d", gyro_x, gyro_y, gyro_z);
+
+		// Debug output if ADC is sus
+		if (adc_raw_battery_level < ADC_BATTERY_MIN || adc_raw_joystick == ADS1015_ERROR || adc_raw_battery_level == ADS1015_ERROR || adc_raw_joystick_2 == ADS1015_ERROR || adc_raw_rssi == ADS1015_ERROR) {
+			ESP_LOGI(__FUNCTION__, "ADC joy1:%d joy2:%d batt:%d rssi:%d IMU ax:%.3f ay:%.3f az:%.3f gx:%d gy:%d gz:%d", adc_raw_joystick, adc_raw_joystick_2, adc_raw_battery_level, adc_raw_rssi, accel_g_x, accel_g_y, accel_g_z, gyro_x, gyro_y, gyro_z);
+		}
 
 		if (accel_g_x == 0 && accel_g_y == 0 && accel_g_z == 0) {
 			ESP_LOGE(__FUNCTION__, "IMU not responding");
@@ -895,12 +925,12 @@ void ST7789_Task(void *pvParameters)
 	int8_t x_offset = 0;
 	switch (my_user_settings.remote_model) {
 		case MODEL_ALBERT:
-			if (my_user_settings.left_handed) x_offset = 5;
-			else x_offset = -5;
+			if (my_user_settings.left_handed) x_offset = 10;
+			else x_offset = -10;
 		break;
 		case MODEL_BRUCE:
-			if (my_user_settings.left_handed) x_offset = 2;
-			else x_offset = -2;
+			if (my_user_settings.left_handed) x_offset = 4;
+			else x_offset = -4;
 		break;
 		case MODEL_CUSTOM:
 			x_offset = 0;
@@ -931,6 +961,9 @@ void ST7789_Task(void *pvParameters)
 	bool is_display_visible = true;
 	TickType_t remote_is_idle_tick = xTaskGetTickCount();
 	TickType_t remote_is_visible_tick = xTaskGetTickCount();
+
+	uint16_t adc_error_count_displayed = adc_error_count;
+
 	while(1) {
 		// Check for setup mode
 		if (remote_in_setup_mode)
@@ -975,10 +1008,9 @@ void ST7789_Task(void *pvParameters)
 			if (abs(gyro_x) > gyro_threshold || abs(gyro_y) > gyro_threshold || abs(gyro_z) > gyro_threshold)
 			{
 				remote_is_idle_tick = xTaskGetTickCount();
-				// Check if we were idle and reset the display values
+				// Check if we were idle
 				if (is_remote_idle) {
 					printf("remote is moving %d, %d, %d\n", gyro_x, gyro_y, gyro_z);
-					resetPreviousValues();
 				}
 				is_remote_idle = false;
 			}
@@ -1054,32 +1086,70 @@ void ST7789_Task(void *pvParameters)
 			lcdBacklightOn(&dev);
 		}
 
+		// Check if ESC timeout alert is necessary
+		if (!esc_timeout_occured && esc_last_responded != 0) {
+			esc_timeout_occured = (xTaskGetTickCount() - esc_last_responded)*portTICK_RATE_MS > 2000;
+			// Trigger melody when timeout is noticed
+			if (esc_timeout_occured && !esc_timeout_dismissed) {
+				if (!my_user_settings.disable_piezo) melody_play(MELODY_CHRIPS, true);
+				haptic_play(MELODY_CHRIPS, true);
+			}
+		}
+
 		// Draw a blank screen when the remote is idle
 		if (is_remote_idle)
 		{
 			lcdFillScreen(&dev, BLACK);
 			alert_visible = false;
+			esc_timeout_dismissed = false; // Allow the ESC timeout message to be re-display
 		}
 		else
-		// Draw the good stuff otherwise
+		// Determine what to display
 		{
+			// Check if we are flagged to clear the display contents
 			if (display_blank_now)
 			{
 				display_blank_now = false;
 				lcdFillScreen(&dev, BLACK);
 				alert_visible = false;
-				resetPreviousValues();
 			}
-			// Draw primary or secondary display
-			if (display_second_screen && !alert_visible)
+
+			// Check if there is an ADC error to display
+			if (adc_error_count != adc_error_count_displayed)
 			{
-				drawScreenSecondary(&dev, fx24G, CONFIG_WIDTH, CONFIG_HEIGHT, &my_user_settings);
+				adc_error_count_displayed = adc_error_count;
+
+				if (!my_user_settings.disable_piezo) melody_play(MELODY_ESC_FAULT, false);
+				haptic_play(MELODY_ESC_FAULT, false);
+
+				char count[6] = {0};
+				sprintf(count, "%hu", adc_error_count);
+
+				lcdFillScreen(&dev, BLACK);
+				drawAlert(&dev, fx24G, RED, "ERROR", "OSRR ADC", count, "Contact", "Support");
+
+				display_second_screen = false;
 			}
+			// Check if throttle is locked
 			else if (is_throttle_locked && !alert_visible)
 			{
-				// Display throttle locked alert over primary screen
+				lcdFillScreen(&dev, BLACK);
 				drawAlert(&dev, fx24G, RED, "Throttle", "locked", "", "Double click", "to unlock");
-				drawScreenPrimary(&dev, fx24G, CONFIG_WIDTH, CONFIG_HEIGHT, &my_user_settings);
+
+				display_second_screen = false;
+			}
+			// Check for ESC timeout
+			else if (!alert_visible && esc_timeout_occured && !esc_timeout_dismissed) {
+
+				lcdFillScreen(&dev, BLACK);
+				drawAlert(&dev, fx24G, RED, "WARNING", "Telemetry was", "not received", "for 2 or more", "seconds");
+
+				display_second_screen = false;
+			}
+			// Draw secondary display if no alerts are visible
+			else if (display_second_screen && !alert_visible)
+			{
+				drawScreenSecondary(&dev, fx24G, CONFIG_WIDTH, CONFIG_HEIGHT, &my_user_settings);
 			}
 			else
 			{

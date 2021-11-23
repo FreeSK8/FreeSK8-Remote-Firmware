@@ -59,6 +59,4 @@ TickType_t drawJPEG(TFT_t * dev, char * file, int width, int height, int offset_
 
 void drawFirmwareVersion(TFT_t * dev, char * version);
 
-void resetPreviousValues();
-
 #endif
