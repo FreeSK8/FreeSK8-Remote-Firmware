@@ -35,7 +35,7 @@ void ADS1015_init()
 
     gpio_config_t io_conf;
     //interrupt on falling edge
-    io_conf.intr_type = (gpio_int_type_t) GPIO_PIN_INTR_NEGEDGE;
+    io_conf.intr_type = (gpio_int_type_t) GPIO_INTR_NEGEDGE;
     //set as input mode
     io_conf.mode = GPIO_MODE_INPUT;
     //bit mask of the pins that you want to set,e.g.GPIO33
